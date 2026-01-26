@@ -2,9 +2,9 @@
 Tasks router for Task Management API.
 
 This module implements endpoints for task operations including listing,
-creating, updating, and deleting tasks.
+creating, updating, and deleting tasks. All endpoints require JWT authentication.
 """
-from typing import List
+from typing import Annotated, List
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,36 +14,40 @@ from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from dependencies import get_or_create_user, validate_user_id
+from src.api.dependencies import get_current_user, verify_user_access
 from models import Task, TaskStatus
 from schemas import TaskCreate, TaskResponse, TaskUpdate
 
 # Create router with prefix and tags
+# T046-T050: Update prefix to include user_id path parameter
 router = APIRouter(
-    prefix="/api/tasks",
+    prefix="/api/{user_id}/tasks",
     tags=["tasks"]
 )
 
 
 @router.get("", response_model=List[TaskResponse])
 async def list_tasks(
-    user_id: UUID = Depends(validate_user_id),
-    db: AsyncSession = Depends(get_db)
+    user_id: Annotated[UUID, Depends(verify_user_access)],
+    db: Annotated[AsyncSession, Depends(get_db)]
 ) -> List[TaskResponse]:
     """
     Get all tasks for the authenticated user.
 
-    Retrieves all tasks belonging to the user identified by the X-User-ID header.
+    Retrieves all tasks belonging to the authenticated user.
     Tasks are returned in descending order by creation date (newest first).
+    Requires valid JWT token in Authorization header.
 
     Args:
-        user_id: User ID from X-User-ID header (validated by validate_user_id dependency)
+        user_id: User ID from URL path parameter (validated by verify_user_access)
         db: Database session
 
     Returns:
         List[TaskResponse]: List of tasks (empty list if user has no tasks)
 
     Raises:
+        HTTPException: 401 if token is missing or invalid
+        HTTPException: 403 if user_id doesn't match token user_id
         HTTPException: 503 error if database is temporarily unavailable
     """
     try:
@@ -76,21 +80,19 @@ async def list_tasks(
 @router.post("", response_model=TaskResponse, status_code=201)
 async def create_task(
     task_data: TaskCreate,
-    user_id: UUID = Depends(validate_user_id),
-    _: UUID = Depends(get_or_create_user),
-    db: AsyncSession = Depends(get_db)
+    user_id: Annotated[UUID, Depends(verify_user_access)],
+    db: Annotated[AsyncSession, Depends(get_db)]
 ) -> TaskResponse:
     """
     Create a new task for the authenticated user.
 
     Creates a new task with the provided title and optional description.
-    The task is automatically assigned to the user identified by the X-User-ID header.
-    If the user doesn't exist, they are automatically created.
+    The task is automatically assigned to the authenticated user.
+    Requires valid JWT token in Authorization header.
 
     Args:
         task_data: Task creation data (title and optional description)
-        user_id: User ID from X-User-ID header (validated by validate_user_id dependency)
-        _: Ensures user exists via get_or_create_user dependency
+        user_id: User ID from URL path parameter (validated by verify_user_access)
         db: Database session
 
     Returns:
@@ -98,6 +100,8 @@ async def create_task(
 
     Raises:
         HTTPException: 400 error if validation fails (title/description constraints)
+        HTTPException: 401 if token is missing or invalid
+        HTTPException: 403 if user_id doesn't match token user_id
         HTTPException: 503 error if database is temporarily unavailable
     """
     try:
@@ -153,18 +157,21 @@ async def create_task(
 @router.patch("/{task_id}/complete", response_model=TaskResponse)
 async def toggle_task_completion(
     task_id: UUID,
-    user_id: UUID = Depends(validate_user_id),
-    db: AsyncSession = Depends(get_db)
+    user_id: Annotated[UUID, Depends(verify_user_access)],
+    db: Annotated[AsyncSession, Depends(get_db)]
 ) -> TaskResponse:
     """
     Toggle task completion status between pending and completed.
 
     Marks a pending task as completed, or a completed task as pending.
     Only the task owner can toggle completion status.
+    Requires valid JWT token in Authorization header.
 
     Args:
         task_id: UUID of the task to toggle
-        user_id: User ID from X-User-ID header (validated by validate_user_id dependency)
+        user_id: User ID from URL path parameter
+        current_user_id: User ID extracted from JWT token
+        _: Ensures user can only access their own tasks
         db: Database session
 
     Returns:
@@ -172,6 +179,7 @@ async def toggle_task_completion(
 
     Raises:
         HTTPException: 400 error if task_id is invalid UUID format
+        HTTPException: 401 if token is missing or invalid
         HTTPException: 403 error if user doesn't own the task
         HTTPException: 404 error if task doesn't exist
         HTTPException: 503 error if database is temporarily unavailable
@@ -259,19 +267,22 @@ async def toggle_task_completion(
 async def update_task(
     task_id: UUID,
     task_data: TaskUpdate,
-    user_id: UUID = Depends(validate_user_id),
-    db: AsyncSession = Depends(get_db)
+    user_id: Annotated[UUID, Depends(verify_user_access)],
+    db: Annotated[AsyncSession, Depends(get_db)]
 ) -> TaskResponse:
     """
     Update task title and/or description.
 
     Updates one or more fields of an existing task. At least one field must be provided.
     Only the task owner can update the task. Status and created_at are preserved.
+    Requires valid JWT token in Authorization header.
 
     Args:
         task_id: UUID of the task to update
         task_data: Task update data (title and/or description)
-        user_id: User ID from X-User-ID header (validated by validate_user_id dependency)
+        user_id: User ID from URL path parameter
+        current_user_id: User ID extracted from JWT token
+        _: Ensures user can only access their own tasks
         db: Database session
 
     Returns:
@@ -279,6 +290,7 @@ async def update_task(
 
     Raises:
         HTTPException: 400 error if no fields provided or validation fails
+        HTTPException: 401 if token is missing or invalid
         HTTPException: 403 error if user doesn't own the task
         HTTPException: 404 error if task doesn't exist
         HTTPException: 503 error if database is temporarily unavailable
@@ -366,17 +378,20 @@ async def update_task(
 @router.get("/{task_id}", response_model=TaskResponse)
 async def get_task(
     task_id: UUID,
-    user_id: UUID = Depends(validate_user_id),
-    db: AsyncSession = Depends(get_db)
+    user_id: Annotated[UUID, Depends(verify_user_access)],
+    db: Annotated[AsyncSession, Depends(get_db)]
 ) -> TaskResponse:
     """
     Get a single task by ID.
 
     Retrieves complete details of a specific task. Only the task owner can view the task.
+    Requires valid JWT token in Authorization header.
 
     Args:
         task_id: UUID of the task to retrieve
-        user_id: User ID from X-User-ID header (validated by validate_user_id dependency)
+        user_id: User ID from URL path parameter
+        current_user_id: User ID extracted from JWT token
+        _: Ensures user can only access their own tasks
         db: Database session
 
     Returns:
@@ -384,6 +399,7 @@ async def get_task(
 
     Raises:
         HTTPException: 400 error if task_id is invalid UUID format
+        HTTPException: 401 if token is missing or invalid
         HTTPException: 403 error if user doesn't own the task
         HTTPException: 404 error if task doesn't exist
         HTTPException: 503 error if database is temporarily unavailable
@@ -459,18 +475,21 @@ async def get_task(
 @router.delete("/{task_id}", status_code=204)
 async def delete_task(
     task_id: UUID,
-    user_id: UUID = Depends(validate_user_id),
-    db: AsyncSession = Depends(get_db)
+    user_id: Annotated[UUID, Depends(verify_user_access)],
+    db: Annotated[AsyncSession, Depends(get_db)]
 ) -> None:
     """
     Delete a task permanently.
 
     Removes a task from the database. Only the task owner can delete the task.
     This operation cannot be undone.
+    Requires valid JWT token in Authorization header.
 
     Args:
         task_id: UUID of the task to delete
-        user_id: User ID from X-User-ID header (validated by validate_user_id dependency)
+        user_id: User ID from URL path parameter
+        current_user_id: User ID extracted from JWT token
+        _: Ensures user can only access their own tasks
         db: Database session
 
     Returns:
@@ -478,6 +497,7 @@ async def delete_task(
 
     Raises:
         HTTPException: 400 error if task_id is invalid UUID format
+        HTTPException: 401 if token is missing or invalid
         HTTPException: 403 error if user doesn't own the task
         HTTPException: 404 error if task doesn't exist
         HTTPException: 503 error if database is temporarily unavailable

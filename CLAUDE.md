@@ -354,6 +354,8 @@ For features that span multiple layers, coordinate agents in this order:
 7. Backend middleware validates token before processing requests
 
 ## Active Technologies
+- Python 3.11+ (backend), TypeScript/Next.js 16+ (frontend - future integration) (002-auth-user-management)
+- Neon Serverless PostgreSQL (existing from Spec 1, extend with users table) (002-auth-user-management)
 
 **Current Feature**: 001-backend-api-data (Backend API & Data Layer)
 - Python 3.11+ with FastAPI 0.109+
