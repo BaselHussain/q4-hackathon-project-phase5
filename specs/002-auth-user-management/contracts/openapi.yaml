@@ -1,0 +1,649 @@
+openapi: 3.0.3
+info:
+  title: Todo App Authentication API
+  description: |
+    Authentication and user management API for the multi-user todo application.
+    Implements user registration, login, and JWT token-based authentication.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User registration and login endpoints
+  - name: Tasks
+    description: Task management endpoints (protected)
+
+paths:
+  /api/auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register new user
+      description: |
+        Create a new user account with email and password.
+        Email must be unique and follow RFC 5322 format.
+        Password must meet complexity requirements.
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              valid:
+                summary: Valid registration
+                value:
+                  email: user@example.com
+                  password: SecurePass123!
+      responses:
+        '201':
+          description: User successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+              examples:
+                success:
+                  value:
+                    user_id: 550e8400-e29b-41d4-a716-446655440000
+                    email: user@example.com
+                    message: User registered successfully
+        '400':
+          description: Invalid input (validation error)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              examples:
+                invalidEmail:
+                  summary: Invalid email format
+                  value:
+                    type: invalid-email-format
+                    title: Invalid Email Format
+                    status: 400
+                    detail: Email address must be in valid format (local@domain)
+                    instance: /api/auth/register
+                invalidPassword:
+                  summary: Invalid password
+                  value:
+                    type: invalid-password
+                    title: Invalid Password
+                    status: 400
+                    detail: Password must be 8-128 characters with uppercase, lowercase, number, and special character
+                    instance: /api/auth/register
+                emailTooLong:
+                  summary: Email too long
+                  value:
+                    type: validation-error
+                    title: Validation Error
+                    status: 400
+                    detail: Email must not exceed 254 characters
+                    instance: /api/auth/register
+        '409':
+          description: Email already registered
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: email-already-registered
+                title: Email Already Registered
+                status: 409
+                detail: An account with this email address already exists
+                instance: /api/auth/register
+
+  /api/auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: |
+        Authenticate user with email and password.
+        Returns JWT token on success.
+        Rate limited to 5 attempts per minute per IP address.
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              valid:
+                summary: Valid login
+                value:
+                  email: user@example.com
+                  password: SecurePass123!
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              example:
+                access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                token_type: bearer
+                expires_in: 86400
+        '401':
+          description: Invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: invalid-credentials
+                title: Invalid Credentials
+                status: 401
+                detail: Invalid email or password
+                instance: /api/auth/login
+        '429':
+          description: Rate limit exceeded
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              example: 60
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: rate-limit-exceeded
+                title: Too Many Requests
+                status: 429
+                detail: Too many login attempts. Please try again in 60 seconds
+                instance: /api/auth/login
+
+  /api/{user_id}/tasks:
+    get:
+      tags:
+        - Tasks
+      summary: Get all tasks for user
+      description: |
+        Retrieve all tasks owned by the authenticated user.
+        Requires valid JWT token in Authorization header.
+        User can only access their own tasks.
+      operationId: getUserTasks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID (must match authenticated user)
+          schema:
+            type: string
+            format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        '200':
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+              example:
+                - id: 660e8400-e29b-41d4-a716-446655440001
+                  title: Complete project documentation
+                  description: Write comprehensive API docs
+                  status: pending
+                  created_at: '2026-01-22T10:00:00Z'
+                  updated_at: '2026-01-22T10:00:00Z'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              examples:
+                missingToken:
+                  summary: Missing authorization header
+                  value:
+                    type: invalid-authorization-header
+                    title: Invalid Authorization Header
+                    status: 401
+                    detail: Authorization header must use Bearer scheme
+                    instance: /api/550e8400-e29b-41d4-a716-446655440000/tasks
+                expiredToken:
+                  summary: Expired token
+                  value:
+                    type: token-expired
+                    title: Token Expired
+                    status: 401
+                    detail: Your session has expired. Please log in again
+                    instance: /api/550e8400-e29b-41d4-a716-446655440000/tasks
+        '403':
+          description: Access denied (wrong user_id)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: access-denied
+                title: Access Denied
+                status: 403
+                detail: You do not have permission to access this resource
+                instance: /api/550e8400-e29b-41d4-a716-446655440000/tasks
+
+    post:
+      tags:
+        - Tasks
+      summary: Create new task
+      description: |
+        Create a new task for the authenticated user.
+        Requires valid JWT token in Authorization header.
+      operationId: createTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID (must match authenticated user)
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+            example:
+              title: Complete project documentation
+              description: Write comprehensive API docs
+      responses:
+        '201':
+          description: Task created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Invalid input
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Access denied
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /api/{user_id}/tasks/{task_id}:
+    get:
+      tags:
+        - Tasks
+      summary: Get specific task
+      description: Retrieve a specific task by ID (must be owned by authenticated user)
+      operationId: getTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Access denied
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Task not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+    put:
+      tags:
+        - Tasks
+      summary: Update task
+      description: Update an existing task (must be owned by authenticated user)
+      operationId: updateTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskRequest'
+      responses:
+        '200':
+          description: Task updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Invalid input
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Access denied
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Task not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+    delete:
+      tags:
+        - Tasks
+      summary: Delete task
+      description: Delete a task (must be owned by authenticated user)
+      operationId: deleteTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Task deleted successfully
+        '401':
+          description: Missing or invalid token
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Access denied
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Task not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token obtained from /api/auth/login endpoint.
+        Include in Authorization header as: Bearer <token>
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: User email address (RFC 5322 format)
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+          description: |
+            Password must contain:
+            - At least 8 characters
+            - At most 128 characters
+            - At least one uppercase letter
+            - At least one lowercase letter
+            - At least one number
+            - At least one special character
+          example: SecurePass123!
+
+    RegisterResponse:
+      type: object
+      required:
+        - user_id
+        - email
+        - message
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: Unique user identifier
+          example: 550e8400-e29b-41d4-a716-446655440000
+        email:
+          type: string
+          format: email
+          description: Registered email address (lowercase)
+          example: user@example.com
+        message:
+          type: string
+          description: Success message
+          example: User registered successfully
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          description: User password
+          example: SecurePass123!
+
+    LoginResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - expires_in
+      properties:
+        access_token:
+          type: string
+          description: JWT access token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0b2RvLWFwcC1iYWNrZW5kIiwic3ViIjoiNTUwZTg0MDAtZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIiwiZXhwIjoxNzA2MDI1NjAwLCJpYXQiOjE3MDU5MzkxMDAsInVzZXJfaWQiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJlbWFpbCI6InVzZXJAZXhhbXBsZS5jb20ifQ.signature
+        token_type:
+          type: string
+          enum: [bearer]
+          description: Token type (always "bearer")
+          example: bearer
+        expires_in:
+          type: integer
+          description: Token expiration time in seconds (24 hours = 86400)
+          example: 86400
+
+    Task:
+      type: object
+      required:
+        - id
+        - title
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique task identifier
+          example: 660e8400-e29b-41d4-a716-446655440001
+        title:
+          type: string
+          maxLength: 200
+          description: Task title
+          example: Complete project documentation
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+          description: Task description (optional)
+          example: Write comprehensive API docs
+        status:
+          type: string
+          enum: [pending, completed]
+          description: Task status
+          example: pending
+        created_at:
+          type: string
+          format: date-time
+          description: Task creation timestamp (ISO 8601)
+          example: '2026-01-22T10:00:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp (ISO 8601)
+          example: '2026-01-22T10:00:00Z'
+
+    CreateTaskRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          maxLength: 200
+          description: Task title
+          example: Complete project documentation
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+          description: Task description (optional)
+          example: Write comprehensive API docs
+
+    UpdateTaskRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+          description: Updated task title
+          example: Complete project documentation
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+          description: Updated task description
+          example: Write comprehensive API docs
+        status:
+          type: string
+          enum: [pending, completed]
+          description: Updated task status
+          example: completed
+
+    ProblemDetails:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - detail
+        - instance
+      properties:
+        type:
+          type: string
+          description: Error type identifier
+          example: invalid-credentials
+        title:
+          type: string
+          description: Short, human-readable error title
+          example: Invalid Credentials
+        status:
+          type: integer
+          description: HTTP status code
+          example: 401
+        detail:
+          type: string
+          description: Detailed error message
+          example: Invalid email or password
+        instance:
+          type: string
+          description: URI of the request that caused the error
+          example: /api/auth/login
+      description: RFC 7807 Problem Details format for error responses

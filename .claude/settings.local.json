@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls \"F:/Q4 Hackathon/Project 2 \\(Phase 2\\)/specs/002-auth-user-management/checklists/\")",
+      "Bash(test:*)",
+      "Bash(ls:*)",
+      "Bash(tree:*)",
+      "Bash(python:*)",
+      "Bash(find \"F:\\\\Q4 Hackathon\\\\Project 2 \\(Phase 2\\)\\\\backend\" -type f -name \"*.py\")",
+      "Bash(alembic current)",
+      "Bash(alembic history)",
+      "Bash(find \"F:\\\\Q4 Hackathon\\\\Project 2 \\(Phase 2\\)\\\\backend\\\\tests\" -name \"conftest.py\")"
+    ]
+  }
+}
