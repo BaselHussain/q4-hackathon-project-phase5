@@ -1,0 +1,357 @@
+# MCP Tools Contract Specification
+# Feature: MCP Server & Tools
+# Date: 2026-02-03
+#
+# This defines the tool interfaces exposed by the MCP server.
+# These are NOT REST endpoints - they are MCP tool definitions.
+
+mcp_server:
+  name: "Todo MCP Server"
+  version: "1.0.0"
+  transport: "streamable-http"
+  endpoint: "/mcp"
+
+tools:
+  # ============================================
+  # Tool 1: add_task
+  # ============================================
+  - name: add_task
+    description: "Create a new task for a user"
+    parameters:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: "UUID of the user who owns this task"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: "Title of the task"
+        description:
+          type: string
+          maxLength: 2000
+          description: "Optional description of the task"
+      required:
+        - user_id
+        - title
+    returns:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            task_id:
+              type: string
+              format: uuid
+            title:
+              type: string
+            description:
+              type: string
+              nullable: true
+            status:
+              type: string
+              enum: ["pending"]
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+        error:
+          type: string
+    examples:
+      success:
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          title: "Buy groceries"
+          description: "Milk, eggs, bread"
+        output:
+          success: true
+          data:
+            task_id: "123e4567-e89b-12d3-a456-426614174000"
+            title: "Buy groceries"
+            description: "Milk, eggs, bread"
+            status: "pending"
+            created_at: "2026-02-03T10:00:00Z"
+            updated_at: "2026-02-03T10:00:00Z"
+      error_missing_title:
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          title: ""
+        output:
+          success: false
+          error: "Task title is required"
+
+  # ============================================
+  # Tool 2: list_tasks
+  # ============================================
+  - name: list_tasks
+    description: "List all tasks for a user with optional status filter"
+    parameters:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: "UUID of the user"
+        status:
+          type: string
+          enum: ["all", "pending", "completed"]
+          default: "all"
+          description: "Filter tasks by status"
+      required:
+        - user_id
+    returns:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              task_id:
+                type: string
+                format: uuid
+              title:
+                type: string
+              description:
+                type: string
+                nullable: true
+              status:
+                type: string
+                enum: ["pending", "completed"]
+              created_at:
+                type: string
+                format: date-time
+              updated_at:
+                type: string
+                format: date-time
+        error:
+          type: string
+    examples:
+      success_all:
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+        output:
+          success: true
+          data:
+            - task_id: "123e4567-e89b-12d3-a456-426614174000"
+              title: "Buy groceries"
+              status: "pending"
+              created_at: "2026-02-03T10:00:00Z"
+              updated_at: "2026-02-03T10:00:00Z"
+            - task_id: "456e7890-e12b-34d5-a678-912345678901"
+              title: "Call mom"
+              status: "completed"
+              created_at: "2026-02-02T09:00:00Z"
+              updated_at: "2026-02-03T11:00:00Z"
+      success_empty:
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          status: "pending"
+        output:
+          success: true
+          data: []
+
+  # ============================================
+  # Tool 3: complete_task
+  # ============================================
+  - name: complete_task
+    description: "Mark a task as completed"
+    parameters:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: "UUID of the user who owns the task"
+        task_id:
+          type: string
+          format: uuid
+          description: "UUID of the task to complete"
+      required:
+        - user_id
+        - task_id
+    returns:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            task_id:
+              type: string
+              format: uuid
+            title:
+              type: string
+            description:
+              type: string
+              nullable: true
+            status:
+              type: string
+              enum: ["completed"]
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+        error:
+          type: string
+    examples:
+      success:
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          task_id: "123e4567-e89b-12d3-a456-426614174000"
+        output:
+          success: true
+          data:
+            task_id: "123e4567-e89b-12d3-a456-426614174000"
+            title: "Buy groceries"
+            status: "completed"
+            created_at: "2026-02-03T10:00:00Z"
+            updated_at: "2026-02-03T12:00:00Z"
+      error_not_found:
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          task_id: "999e9999-e99b-99d9-a999-999999999999"
+        output:
+          success: false
+          error: "Task not found or access denied"
+
+  # ============================================
+  # Tool 4: delete_task
+  # ============================================
+  - name: delete_task
+    description: "Permanently delete a task"
+    parameters:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: "UUID of the user who owns the task"
+        task_id:
+          type: string
+          format: uuid
+          description: "UUID of the task to delete"
+      required:
+        - user_id
+        - task_id
+    returns:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            task_id:
+              type: string
+              format: uuid
+            message:
+              type: string
+        error:
+          type: string
+    examples:
+      success:
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          task_id: "123e4567-e89b-12d3-a456-426614174000"
+        output:
+          success: true
+          data:
+            task_id: "123e4567-e89b-12d3-a456-426614174000"
+            message: "Task deleted successfully"
+      error_wrong_user:
+        input:
+          user_id: "different-user-uuid"
+          task_id: "123e4567-e89b-12d3-a456-426614174000"
+        output:
+          success: false
+          error: "Task not found or access denied"
+
+  # ============================================
+  # Tool 5: update_task
+  # ============================================
+  - name: update_task
+    description: "Update a task's title and/or description"
+    parameters:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: "UUID of the user who owns the task"
+        task_id:
+          type: string
+          format: uuid
+          description: "UUID of the task to update"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: "New title for the task (optional)"
+        description:
+          type: string
+          maxLength: 2000
+          description: "New description for the task (optional)"
+      required:
+        - user_id
+        - task_id
+    returns:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            task_id:
+              type: string
+              format: uuid
+            title:
+              type: string
+            description:
+              type: string
+              nullable: true
+            status:
+              type: string
+              enum: ["pending", "completed"]
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+        error:
+          type: string
+    examples:
+      success_title_only:
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          task_id: "123e4567-e89b-12d3-a456-426614174000"
+          title: "Buy groceries and snacks"
+        output:
+          success: true
+          data:
+            task_id: "123e4567-e89b-12d3-a456-426614174000"
+            title: "Buy groceries and snacks"
+            description: "Milk, eggs, bread"
+            status: "pending"
+            created_at: "2026-02-03T10:00:00Z"
+            updated_at: "2026-02-03T13:00:00Z"
+      error_no_fields:
+        input:
+          user_id: "550e8400-e29b-41d4-a716-446655440000"
+          task_id: "123e4567-e89b-12d3-a456-426614174000"
+        output:
+          success: false
+          error: "At least one field (title or description) must be provided"

@@ -24,7 +24,8 @@
       "Bash(find:*)",
       "Bash(npx tsc --noEmit)",
       "Bash(node:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(git fetch:*)"
     ]
   }
 }
