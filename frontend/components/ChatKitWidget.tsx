@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
 import { isAuthenticated, getToken } from '@/lib/auth';
 

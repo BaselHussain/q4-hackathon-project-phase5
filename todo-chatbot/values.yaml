@@ -1,0 +1,60 @@
+# Todo Chatbot Helm Values
+# Two deployments: backend (FastAPI + MCP) and frontend (Next.js)
+
+replicaCount: 1
+
+# Backend — FastAPI (8002) + MCP Server (8001)
+backend:
+  image:
+    repository: todo-backend
+    tag: latest
+    pullPolicy: Never  # Use local Docker images (minikube)
+  service:
+    type: NodePort
+    apiPort: 8002
+    mcpPort: 8001
+    nodePortApi: 30002
+    nodePortMcp: 30001
+  env:
+    API_PORT: "8002"
+  # Secret env vars — override via --set or secrets
+  secretEnv:
+    DATABASE_URL: ""
+    BETTER_AUTH_SECRET: ""
+    OPENAI_API_KEY: ""
+
+# Frontend — Next.js (3000)
+frontend:
+  image:
+    repository: todo-frontend
+    tag: latest
+    pullPolicy: Never  # Use local Docker images (minikube)
+  service:
+    type: NodePort
+    port: 3000
+    nodePort: 30000
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+podSecurityContext: {}
+securityContext: {}
+
+ingress:
+  enabled: false
+
+httpRoute:
+  enabled: false
+
+autoscaling:
+  enabled: false
+
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

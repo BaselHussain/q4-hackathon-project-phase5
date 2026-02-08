@@ -1,0 +1,14 @@
+Todo Chatbot deployed successfully!
+
+Access the application:
+
+  Frontend (Next.js):
+    minikube service {{ include "todo-chatbot.frontendFullname" . }} --url
+
+  Backend API (FastAPI):
+    minikube service {{ include "todo-chatbot.backendFullname" . }} --url
+
+  Ports:
+    Frontend:  NodePort {{ .Values.frontend.service.nodePort }}
+    Backend API: NodePort {{ .Values.backend.service.nodePortApi }}
+    MCP Server:  NodePort {{ .Values.backend.service.nodePortMcp }}

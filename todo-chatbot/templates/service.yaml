@@ -1,0 +1,43 @@
+---
+# Backend Service — exposes FastAPI (8002) and MCP (8001)
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "todo-chatbot.backendFullname" . }}
+  labels:
+    {{- include "todo-chatbot.labels" . | nindent 4 }}
+    {{- include "todo-chatbot.backendSelectorLabels" . | nindent 4 }}
+spec:
+  type: {{ .Values.backend.service.type }}
+  ports:
+    - port: {{ .Values.backend.service.apiPort }}
+      targetPort: api
+      nodePort: {{ .Values.backend.service.nodePortApi }}
+      protocol: TCP
+      name: api
+    - port: {{ .Values.backend.service.mcpPort }}
+      targetPort: mcp
+      nodePort: {{ .Values.backend.service.nodePortMcp }}
+      protocol: TCP
+      name: mcp
+  selector:
+    {{- include "todo-chatbot.backendSelectorLabels" . | nindent 4 }}
+---
+# Frontend Service — exposes Next.js (3000)
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "todo-chatbot.frontendFullname" . }}
+  labels:
+    {{- include "todo-chatbot.labels" . | nindent 4 }}
+    {{- include "todo-chatbot.frontendSelectorLabels" . | nindent 4 }}
+spec:
+  type: {{ .Values.frontend.service.type }}
+  ports:
+    - port: {{ .Values.frontend.service.port }}
+      targetPort: http
+      nodePort: {{ .Values.frontend.service.nodePort }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "todo-chatbot.frontendSelectorLabels" . | nindent 4 }}
