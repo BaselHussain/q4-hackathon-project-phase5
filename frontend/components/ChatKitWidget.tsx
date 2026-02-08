@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { isAuthenticated, getToken } from '@/lib/auth';
 
@@ -15,12 +16,12 @@ export function ChatKitWidget({ prePopulatedText, onClearPrePopulatedText }: Cha
   const [error, setError] = useState<string | null>(null);
   const [isMinimized, setIsMinimized] = useState(true);
 
-  // Cache auth check on mount so it doesn't flicker on re-renders
+  // Re-check auth on every route change (e.g. after login redirects to /dashboard)
   const [authed, setAuthed] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     setIsClient(true);
-    setAuthed(isAuthenticated());
 
     import('@openai/chatkit-react')
       .then((module) => {
@@ -32,6 +33,11 @@ export function ChatKitWidget({ prePopulatedText, onClearPrePopulatedText }: Cha
         setError(`Failed to load ChatKit: ${err.message}`);
       });
   }, []);
+
+  // Re-check auth state on route changes
+  useEffect(() => {
+    setAuthed(isAuthenticated());
+  }, [pathname]);
 
   // Auto-open widget when pre-populated text arrives
   useEffect(() => {
@@ -123,7 +129,7 @@ function ChatKitInner({
   const { control, setThreadId, setComposerValue } = useChatKit({
     api: {
       url: `${apiBaseUrl}/chatkit`,
-      domainKey: 'domain_pk_6942eec6dc90819384d12f2d4dd04f2702cafb8cb64cf088',
+      domainKey: 'domain_pk_69880ff7bb688190b20fba4a75b722e4001d97f86d6c4216',
       fetch: authenticatedFetch,
     },
     theme: {
