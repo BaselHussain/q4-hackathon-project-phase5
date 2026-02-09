@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://todo.app/schemas/task-update-event.json",
+  "title": "Task Update Event",
+  "description": "CloudEvents-compliant event for real-time task synchronization to WebSocket clients",
+  "type": "object",
+  "required": ["specversion", "type", "source", "id", "time", "datacontenttype", "data"],
+  "properties": {
+    "specversion": {
+      "type": "string",
+      "const": "1.0",
+      "description": "CloudEvents specification version"
+    },
+    "type": {
+      "type": "string",
+      "const": "com.todo.task.sync",
+      "description": "Event type for real-time synchronization"
+    },
+    "source": {
+      "type": "string",
+      "description": "Service that published the event",
+      "examples": ["sync-service"]
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique event identifier (UUID v4)"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Event timestamp in ISO 8601 format with timezone"
+    },
+    "datacontenttype": {
+      "type": "string",
+      "const": "application/json",
+      "description": "Content type of data field"
+    },
+    "data": {
+      "type": "object",
+      "required": ["task_id", "user_id", "sequence", "changed_fields"],
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Task identifier"
+        },
+        "user_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "User who owns the task"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Event sequence number for ordering"
+        },
+        "changed_fields": {
+          "type": "object",
+          "description": "Object with field names as keys and new values",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

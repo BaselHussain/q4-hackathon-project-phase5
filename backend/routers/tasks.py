@@ -3,8 +3,10 @@ Tasks router for Task Management API.
 
 This module implements endpoints for task operations including listing,
 creating, updating, and deleting tasks. All endpoints require JWT authentication.
+Event publishing via Dapr Pub/Sub is integrated for event-driven architecture.
 """
-from datetime import datetime
+import logging
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, List, Optional
 from uuid import UUID, uuid4
 
@@ -18,6 +20,10 @@ from database import get_db
 from src.api.dependencies import get_current_user, verify_user_access
 from models import Task, TaskStatus, TaskPriority, TaskRecurrence
 from schemas import TaskCreate, TaskResponse, TaskUpdate
+from events.publisher import publish_task_event, publish_reminder_event, publish_sync_event
+from events.schemas import TaskEventType, TaskEventPayload, ReminderEventType
+
+logger = logging.getLogger(__name__)
 
 # Create router with prefix and tags
 # T046-T050: Update prefix to include user_id path parameter
@@ -243,6 +249,45 @@ async def create_task(
         await db.commit()
         await db.refresh(new_task)
 
+        # Publish task.created event (fire-and-forget, don't block response)
+        try:
+            payload = TaskEventPayload(
+                title=new_task.title,
+                description=new_task.description,
+                status=new_task.status.value,
+                priority=new_task.priority.value if hasattr(new_task.priority, 'value') else str(new_task.priority),
+                tags=new_task.tags,
+                due_date=new_task.due_date.isoformat() if new_task.due_date else None,
+                recurring_pattern=new_task.recurrence.value if hasattr(new_task.recurrence, 'value') else str(new_task.recurrence),
+            )
+            await publish_task_event(
+                event_type=TaskEventType.CREATED,
+                task_id=new_task.id,
+                user_id=user_id,
+                payload=payload,
+            )
+
+            # Publish sync event for real-time updates
+            await publish_sync_event(
+                task_id=new_task.id,
+                user_id=user_id,
+                changed_fields={"action": "created", "title": new_task.title, "status": new_task.status.value},
+            )
+
+            # If task has due date, schedule reminder (15 min before)
+            if new_task.due_date:
+                reminder_time = new_task.due_date - timedelta(minutes=15)
+                if reminder_time > datetime.now(timezone.utc):
+                    await publish_reminder_event(
+                        event_type=ReminderEventType.SCHEDULE,
+                        task_id=new_task.id,
+                        user_id=user_id,
+                        due_date=new_task.due_date,
+                        reminder_time=reminder_time,
+                    )
+        except Exception as e:
+            logger.warning(f"Event publishing failed for task create: {e}")
+
         return TaskResponse.model_validate(new_task)
 
     except ValidationError as e:
@@ -351,6 +396,44 @@ async def toggle_task_completion(
         # T041: Update updated_at timestamp (handled automatically by onupdate trigger)
         await db.commit()
         await db.refresh(task)
+
+        # Publish task.completed or task.updated event
+        try:
+            event_type = TaskEventType.COMPLETED if task.status == TaskStatus.COMPLETED else TaskEventType.UPDATED
+            payload = TaskEventPayload(
+                title=task.title,
+                description=task.description,
+                status=task.status.value,
+                priority=task.priority.value if hasattr(task.priority, 'value') else str(task.priority),
+                tags=task.tags,
+                due_date=task.due_date.isoformat() if task.due_date else None,
+                recurring_pattern=task.recurrence.value if hasattr(task.recurrence, 'value') else str(task.recurrence),
+                changed_fields=["status"],
+            )
+            await publish_task_event(
+                event_type=event_type,
+                task_id=task.id,
+                user_id=user_id,
+                payload=payload,
+            )
+
+            await publish_sync_event(
+                task_id=task.id,
+                user_id=user_id,
+                changed_fields={"status": task.status.value},
+            )
+
+            # If task completed and had due date, cancel reminder
+            if task.status == TaskStatus.COMPLETED and task.due_date:
+                await publish_reminder_event(
+                    event_type=ReminderEventType.CANCEL,
+                    task_id=task.id,
+                    user_id=user_id,
+                    due_date=task.due_date,
+                    reminder_time=task.due_date,
+                )
+        except Exception as e:
+            logger.warning(f"Event publishing failed for task completion toggle: {e}")
 
         # T042: Return 200 OK with updated TaskResponse
         return TaskResponse.model_validate(task)
@@ -469,8 +552,64 @@ async def update_task(
 
         # T049: Preserve status and created_at fields (not modified)
         # T050: Update updated_at timestamp (handled automatically by onupdate trigger)
+
+        # Track changed fields for event publishing
+        changed = []
+        if task_data.title is not None:
+            changed.append("title")
+        if task_data.description is not None:
+            changed.append("description")
+        if task_data.priority is not None:
+            changed.append("priority")
+        if task_data.due_date is not None:
+            changed.append("due_date")
+        if task_data.tags is not None:
+            changed.append("tags")
+        if task_data.recurrence is not None:
+            changed.append("recurrence")
+
         await db.commit()
         await db.refresh(task)
+
+        # Publish task.updated event
+        try:
+            payload = TaskEventPayload(
+                title=task.title,
+                description=task.description,
+                status=task.status.value,
+                priority=task.priority.value if hasattr(task.priority, 'value') else str(task.priority),
+                tags=task.tags,
+                due_date=task.due_date.isoformat() if task.due_date else None,
+                recurring_pattern=task.recurrence.value if hasattr(task.recurrence, 'value') else str(task.recurrence),
+                changed_fields=changed,
+            )
+            await publish_task_event(
+                event_type=TaskEventType.UPDATED,
+                task_id=task.id,
+                user_id=user_id,
+                payload=payload,
+            )
+
+            sync_changes = {field: getattr(task_data, field) for field in changed if hasattr(task_data, field)}
+            await publish_sync_event(
+                task_id=task.id,
+                user_id=user_id,
+                changed_fields=sync_changes,
+            )
+
+            # If due_date changed, reschedule reminder
+            if "due_date" in changed and task.due_date:
+                reminder_time = task.due_date - timedelta(minutes=15)
+                if reminder_time > datetime.now(timezone.utc):
+                    await publish_reminder_event(
+                        event_type=ReminderEventType.SCHEDULE,
+                        task_id=task.id,
+                        user_id=user_id,
+                        due_date=task.due_date,
+                        reminder_time=reminder_time,
+                    )
+        except Exception as e:
+            logger.warning(f"Event publishing failed for task update: {e}")
 
         # T052: Return 200 OK with updated TaskResponse
         return TaskResponse.model_validate(task)
@@ -667,9 +806,54 @@ async def delete_task(
                     }
                 )
 
+        # Capture task data before deletion for event publishing
+        task_title = task.title
+        task_description = task.description
+        task_status = task.status.value
+        task_priority = task.priority.value if hasattr(task.priority, 'value') else str(task.priority)
+        task_tags = task.tags
+        task_due_date = task.due_date
+        task_recurrence = task.recurrence.value if hasattr(task.recurrence, 'value') else str(task.recurrence)
+
         # T063: Delete task from database
         await db.delete(task)
         await db.commit()
+
+        # Publish task.deleted event
+        try:
+            payload = TaskEventPayload(
+                title=task_title,
+                description=task_description,
+                status=task_status,
+                priority=task_priority,
+                tags=task_tags,
+                due_date=task_due_date.isoformat() if task_due_date else None,
+                recurring_pattern=task_recurrence,
+            )
+            await publish_task_event(
+                event_type=TaskEventType.DELETED,
+                task_id=task_id,
+                user_id=user_id,
+                payload=payload,
+            )
+
+            await publish_sync_event(
+                task_id=task_id,
+                user_id=user_id,
+                changed_fields={"action": "deleted"},
+            )
+
+            # Cancel any scheduled reminders for this task
+            if task_due_date:
+                await publish_reminder_event(
+                    event_type=ReminderEventType.CANCEL,
+                    task_id=task_id,
+                    user_id=user_id,
+                    due_date=task_due_date,
+                    reminder_time=task_due_date,
+                )
+        except Exception as e:
+            logger.warning(f"Event publishing failed for task delete: {e}")
 
         # T064: Return 204 No Content (handled by status_code=204 in decorator)
         return None

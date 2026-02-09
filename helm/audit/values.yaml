@@ -1,0 +1,33 @@
+replicaCount: 1
+
+image:
+  repository: audit-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8004
+
+dapr:
+  enabled: true
+  appId: audit-service
+  appPort: 8004
+  logLevel: info
+
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "256Mi"
+    cpu: "250m"
+
+env:
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef:
+        name: app-secrets
+        key: database-url
+  - name: DAPR_HTTP_PORT
+    value: "3500"

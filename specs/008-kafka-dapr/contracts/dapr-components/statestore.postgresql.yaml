@@ -1,0 +1,47 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: statestore
+  namespace: default
+spec:
+  type: state.postgresql
+  version: v1
+  metadata:
+  # PostgreSQL connection string (from Kubernetes Secret)
+  - name: connectionString
+    secretKeyRef:
+      name: postgres-creds
+      key: connectionString
+
+  # Table name for Dapr state
+  - name: tableName
+    value: "dapr_state"
+
+  # Metadata table for state management
+  - name: metadataTableName
+    value: "dapr_state_metadata"
+
+  # Timeout configuration
+  - name: timeout
+    value: "30s"
+
+  # Connection pool configuration
+  - name: maxConns
+    value: "10"
+  - name: connectionMaxIdleTime
+    value: "5m"
+
+  # Enable TTL support for automatic cleanup
+  - name: cleanupIntervalInSeconds
+    value: "3600"  # Run cleanup every hour
+
+  # Transaction support
+  - name: actorStateStore
+    value: "true"
+
+scopes:
+- backend-api
+- recurring-task-service
+- notification-service
+- audit-service
+- sync-service

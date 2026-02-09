@@ -1,0 +1,13 @@
+apiVersion: v2
+name: backend
+description: Todo App Backend API with Dapr sidecar for event-driven architecture
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - fastapi
+  - dapr
+  - backend
+  - event-driven
+maintainers:
+  - name: Todo App Team

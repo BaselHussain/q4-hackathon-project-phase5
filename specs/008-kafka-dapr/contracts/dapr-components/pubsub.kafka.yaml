@@ -1,0 +1,56 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pubsub
+  namespace: default
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+  # Redpanda Cloud bootstrap servers
+  - name: brokers
+    value: "bootstrap.redpanda.cloud:9092"
+
+  # Authentication configuration
+  - name: authType
+    value: "password"
+  - name: saslMechanism
+    value: "SCRAM-SHA-256"
+  - name: saslUsername
+    secretKeyRef:
+      name: redpanda-creds
+      key: username
+  - name: saslPassword
+    secretKeyRef:
+      name: redpanda-creds
+      key: password
+
+  # Consumer group configuration
+  # Each service will use its app-id as consumer group
+  - name: consumerGroup
+    value: "{APP_ID}"
+
+  # Consumer configuration
+  - name: consumeRetryInterval
+    value: "1s"
+  - name: consumeRetryEnabled
+    value: "true"
+
+  # Producer configuration
+  - name: maxMessageBytes
+    value: "1048576"  # 1 MB max message size
+
+  # Topic configuration (topics created automatically if not exist)
+  - name: initialOffset
+    value: "newest"  # Start from newest messages for new consumers
+
+  # Retry and error handling
+  - name: version
+    value: "2.8.0"  # Kafka protocol version
+
+scopes:
+- backend-api
+- recurring-task-service
+- notification-service
+- audit-service
+- sync-service

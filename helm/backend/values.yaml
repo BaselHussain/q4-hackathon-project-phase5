@@ -1,0 +1,88 @@
+# Default values for backend service
+replicaCount: 2
+
+image:
+  repository: todo-app/backend
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: true
+  className: "oci-native-ingress-controller"
+  annotations: {}
+  tls: []
+
+dapr:
+  enabled: true
+  appId: backend-api
+  appPort: "8000"
+  logLevel: info
+  config: ""
+  enableMetrics: true
+  metricsPort: "9090"
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "250m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 15
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+env:
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef:
+        name: app-secrets
+        key: database-url
+  - name: ORACLE_STREAMING_ENDPOINT
+    valueFrom:
+      secretKeyRef:
+        name: oci-streaming-creds
+        key: streaming-endpoint
+  - name: ORACLE_STREAMING_USERNAME
+    valueFrom:
+      secretKeyRef:
+        name: oci-streaming-creds
+        key: sasl-username
+  - name: ORACLE_STREAMING_AUTH_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: oci-streaming-creds
+        key: auth-token
+  - name: BETTER_AUTH_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: app-secrets
+        key: better-auth-secret
+  - name: DAPR_HTTP_PORT
+    value: "3500"
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

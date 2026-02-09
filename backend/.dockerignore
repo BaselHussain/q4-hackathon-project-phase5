@@ -1,19 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.Python
+*.pyc
+
+# Virtual environments
 venv/
 .venv/
-__pycache__/
-*.pyc
-*.pyo
+env/
+ENV/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
 .pytest_cache/
-htmlcov/
 .coverage
-*.egg-info/
-dist/
-build/
+htmlcov/
+.tox/
+tests/
+*.test.py
+
+# Documentation
+*.md
+docs/
+
+# Git
 .git/
 .gitignore
-Dockerfile
-.dockerignore
-check_*.py
-test_*.py
-init_db.py
-check_alembic_version.py
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db

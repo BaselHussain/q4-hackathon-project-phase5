@@ -1,0 +1,90 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://todo.app/schemas/reminder-event.json",
+  "title": "Reminder Event",
+  "description": "CloudEvents-compliant event for reminder scheduling and cancellation",
+  "type": "object",
+  "required": ["specversion", "type", "source", "id", "time", "datacontenttype", "data"],
+  "properties": {
+    "specversion": {
+      "type": "string",
+      "const": "1.0",
+      "description": "CloudEvents specification version"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "com.todo.reminder.schedule",
+        "com.todo.reminder.cancel"
+      ],
+      "description": "Event type for reminder operations"
+    },
+    "source": {
+      "type": "string",
+      "description": "Service that published the event",
+      "examples": ["backend-api"]
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique event identifier (UUID v4)"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Event timestamp in ISO 8601 format with timezone"
+    },
+    "datacontenttype": {
+      "type": "string",
+      "const": "application/json",
+      "description": "Content type of data field"
+    },
+    "data": {
+      "type": "object",
+      "required": ["task_id", "user_id"],
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Task identifier"
+        },
+        "user_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "User to notify"
+        },
+        "due_date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Task due date (required for schedule events)"
+        },
+        "reminder_time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When to send reminder (required for schedule events)"
+        },
+        "notification_channels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["email", "push"]
+          },
+          "minItems": 1,
+          "description": "Array of notification channels"
+        },
+        "user_email": {
+          "type": "string",
+          "format": "email",
+          "description": "User's email address (for email notifications)"
+        },
+        "device_tokens": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Array of FCM device tokens (for push notifications)"
+        }
+      }
+    }
+  }
+}
