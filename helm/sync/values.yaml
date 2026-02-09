@@ -1,0 +1,39 @@
+replicaCount: 2
+
+image:
+  repository: sync-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8003
+
+ingress:
+  enabled: true
+  className: "oci-native-ingress-controller"
+  annotations: {}
+  tls: []
+
+dapr:
+  enabled: true
+  appId: sync-service
+  appPort: 8003
+  logLevel: info
+
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "256Mi"
+    cpu: "250m"
+
+env:
+  - name: BETTER_AUTH_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: app-secrets
+        key: better-auth-secret
+  - name: DAPR_HTTP_PORT
+    value: "3500"

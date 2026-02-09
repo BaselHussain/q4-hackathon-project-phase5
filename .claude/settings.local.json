@@ -32,7 +32,10 @@
       "Bash(bash .specify/scripts/bash/setup-plan.sh:*)",
       "Bash(.venv/Scripts/pip.exe install openai-chatkit)",
       "Bash(.venv/Scripts/python.exe:*)",
-      "Bash(git log --oneline --grep=\"chatkit\\\\|ChatKit\" -i --all)"
+      "Bash(git log --oneline --grep=\"chatkit\\\\|ChatKit\" -i --all)",
+      "Bash(echo:*)",
+      "Bash(\"E:/Q4 Hackathon/Project 2 \\(Phase 5\\)/backend/.dockerignore\")",
+      "Bash(bash .specify/scripts/bash/create-phr.sh --title \"kafka-dapr-implementation\" --stage \"green\" --feature \"008-kafka-dapr\" --json)"
     ]
   }
 }

@@ -1,0 +1,62 @@
+# Default values for recurring-task service
+replicaCount: 1
+
+image:
+  repository: todo-app/recurring-task
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 8001
+
+dapr:
+  enabled: true
+  appId: recurring-task-service
+  appPort: "8001"
+  logLevel: info
+  config: ""
+  enableMetrics: true
+  metricsPort: "9090"
+
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "256Mi"
+    cpu: "250m"
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 15
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+env:
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef:
+        name: app-secrets
+        key: database-url
+  - name: DAPR_HTTP_PORT
+    value: "3500"
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

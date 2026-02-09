@@ -8,7 +8,8 @@ from src.models.user import User
 from src.models.task import Task, TaskStatus, TaskPriority, TaskRecurrence
 from src.models.conversation import Conversation
 from src.models.message import Message, MessageRole
+from src.models.audit_log import AuditLog
 
 # Re-export for backward compatibility
-__all__ = ["User", "Task", "TaskStatus", "TaskPriority", "TaskRecurrence", "Conversation", "Message", "MessageRole"]
+__all__ = ["User", "Task", "TaskStatus", "TaskPriority", "TaskRecurrence", "Conversation", "Message", "MessageRole", "AuditLog"]
 

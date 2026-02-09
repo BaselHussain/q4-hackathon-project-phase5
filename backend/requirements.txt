@@ -21,3 +21,8 @@ openai-agents>=0.0.7
 
 # ChatKit Server SDK (Phase 6 - Frontend Chat Widget)
 openai-chatkit>=0.1.0
+
+# Event-Driven Architecture dependencies (Spec 8 - Kafka + Dapr)
+httpx>=0.26.0
+croniter>=2.0.0
+websockets>=12.0

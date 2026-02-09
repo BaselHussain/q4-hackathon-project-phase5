@@ -61,3 +61,31 @@ htmlcov/
 *.bak
 *.swp
 Thumbs.db
+
+# Kubernetes
+*.secret.yaml
+secrets/
+.kube/
+kubeconfig*
+*.key
+*.crt
+
+# Helm
+*.tgz
+charts/*/charts/
+
+# Docker
+.dockerignore
+*.dockerfile
+docker-compose.override.yml
+
+# Dapr
+.dapr/
+components/
+
+# Node.js (Frontend)
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts

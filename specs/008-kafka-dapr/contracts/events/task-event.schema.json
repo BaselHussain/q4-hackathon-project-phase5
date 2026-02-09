@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://todo.app/schemas/task-event.json",
+  "title": "Task Event",
+  "description": "CloudEvents-compliant event for task lifecycle operations (created, updated, completed, deleted)",
+  "type": "object",
+  "required": ["specversion", "type", "source", "id", "time", "datacontenttype", "data"],
+  "properties": {
+    "specversion": {
+      "type": "string",
+      "const": "1.0",
+      "description": "CloudEvents specification version"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "com.todo.task.created",
+        "com.todo.task.updated",
+        "com.todo.task.completed",
+        "com.todo.task.deleted"
+      ],
+      "description": "Event type following reverse-DNS naming convention"
+    },
+    "source": {
+      "type": "string",
+      "description": "Service that published the event",
+      "examples": ["backend-api", "recurring-task-service"]
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique event identifier (UUID v4) - serves as idempotency key"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Event timestamp in ISO 8601 format with timezone"
+    },
+    "datacontenttype": {
+      "type": "string",
+      "const": "application/json",
+      "description": "Content type of data field"
+    },
+    "data": {
+      "type": "object",
+      "required": ["task_id", "user_id", "sequence", "idempotency_key", "payload"],
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Task identifier"
+        },
+        "user_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "User who performed the action"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Monotonically increasing sequence number per task"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Duplicate of event ID for consumer convenience"
+        },
+        "payload": {
+          "type": "object",
+          "description": "Task-specific data (varies by event type)",
+          "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 2000
+            },
+            "status": {
+              "type": "string",
+              "enum": ["pending", "completed"]
+            },
+            "priority": {
+              "type": "string",
+              "enum": ["high", "medium", "low"]
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "due_date": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "recurring_pattern": {
+              "type": "string",
+              "enum": ["daily", "weekly", "monthly", "custom"]
+            },
+            "recurring_interval": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "recurring_end_condition": {
+              "type": "string",
+              "enum": ["never", "after_n_occurrences", "by_date"]
+            },
+            "changed_fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Array of field names that changed (for updated events)"
+            }
+          }
+        }
+      }
+    }
+  }
+}

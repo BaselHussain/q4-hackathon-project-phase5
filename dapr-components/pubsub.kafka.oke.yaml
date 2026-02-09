@@ -1,0 +1,60 @@
+# Dapr Pub/Sub Component: Oracle Streaming Service (Kafka-compatible)
+# Spec 8 - Event-Driven Architecture on Oracle Cloud Infrastructure
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pubsub
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+    # Oracle Streaming Service endpoint (Kafka-compatible)
+    # Format: cell-1.streaming.<region>.oci.oraclecloud.com:9092
+    - name: brokers
+      value: "cell-1.streaming.ap-mumbai-1.oci.oraclecloud.com:9092"
+
+    # Authentication
+    - name: authType
+      value: "password"
+
+    # Oracle Streaming uses PLAIN SASL mechanism
+    - name: saslMechanism
+      value: "PLAIN"
+
+    # SASL Username format: <tenancy-name>/<username>/<stream-pool-ocid>
+    # Stored in Kubernetes secret
+    - name: saslUsername
+      secretKeyRef:
+        name: oci-streaming-creds
+        key: sasl-username
+
+    # Auth token generated via OCI CLI
+    - name: saslPassword
+      secretKeyRef:
+        name: oci-streaming-creds
+        key: auth-token
+
+    # Consumer group (uses Dapr app-id)
+    - name: consumerGroup
+      value: "{APP_ID}"
+
+    # Start from oldest message on first connect
+    - name: initialOffset
+      value: "oldest"
+
+    # Maximum message size (1MB)
+    - name: maxMessageBytes
+      value: "1048576"
+
+    # Retry interval on consume errors
+    - name: consumeRetryInterval
+      value: "1000ms"
+
+    # Kafka protocol version
+    - name: version
+      value: "3.0.0"
+
+    # TLS enabled (Oracle Streaming requires TLS)
+    - name: disableTls
+      value: "false"
+
