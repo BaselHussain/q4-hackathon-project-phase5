@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, String, func
+from sqlalchemy import ARRAY, Column, DateTime, String, func
 from sqlmodel import Field, SQLModel
 
 
@@ -16,6 +16,22 @@ class TaskStatus(str, enum.Enum):
     """Enumeration for task status values."""
     PENDING = "pending"
     COMPLETED = "completed"
+
+
+class TaskPriority(str, enum.Enum):
+    """Enumeration for task priority levels."""
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class TaskRecurrence(str, enum.Enum):
+    """Enumeration for task recurrence patterns."""
+    NONE = "none"
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+    YEARLY = "yearly"
 
 
 class Task(SQLModel, table=True):
@@ -62,6 +78,22 @@ class Task(SQLModel, table=True):
     status: TaskStatus = Field(
         default=TaskStatus.PENDING,
         nullable=False
+    )
+    priority: TaskPriority = Field(
+        default=TaskPriority.MEDIUM,
+        sa_column=Column(String(10), nullable=False, default="medium")
+    )
+    due_date: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    tags: Optional[list[str]] = Field(
+        default=None,
+        sa_column=Column(ARRAY(String(50)), nullable=True)
+    )
+    recurrence: TaskRecurrence = Field(
+        default=TaskRecurrence.NONE,
+        sa_column=Column(String(10), nullable=False, default="none")
     )
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now())

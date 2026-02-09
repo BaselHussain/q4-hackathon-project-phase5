@@ -4,18 +4,19 @@ Tasks router for Task Management API.
 This module implements endpoints for task operations including listing,
 creating, updating, and deleting tasks. All endpoints require JWT authentication.
 """
-from typing import Annotated, List
+from datetime import datetime
+from typing import Annotated, List, Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import case, func, literal, or_, select
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from src.api.dependencies import get_current_user, verify_user_access
-from models import Task, TaskStatus
+from models import Task, TaskStatus, TaskPriority, TaskRecurrence
 from schemas import TaskCreate, TaskResponse, TaskUpdate
 
 # Create router with prefix and tags
@@ -26,46 +27,159 @@ router = APIRouter(
 )
 
 
+VALID_SORT_FIELDS = ["priority", "due_date", "created_at", "status"]
+
+
 @router.get("", response_model=List[TaskResponse])
 async def list_tasks(
     user_id: Annotated[UUID, Depends(verify_user_access)],
-    db: Annotated[AsyncSession, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)],
+    status: Optional[str] = Query("all", description="Filter by status: all, pending, completed"),
+    priority: Optional[str] = Query(None, description="Filter by priority: high, medium, low"),
+    tags: Optional[str] = Query(None, description="Filter by tags (comma-separated, AND logic)"),
+    due_before: Optional[datetime] = Query(None, description="Tasks due before this date"),
+    due_after: Optional[datetime] = Query(None, description="Tasks due after this date"),
+    overdue: Optional[bool] = Query(False, description="Show only overdue tasks"),
+    search: Optional[str] = Query(None, description="Search in title and description"),
+    sort: Optional[str] = Query("created_at", description="Sort field: priority, due_date, created_at, status"),
+    order: Optional[str] = Query("desc", description="Sort direction: asc, desc"),
 ) -> List[TaskResponse]:
     """
-    Get all tasks for the authenticated user.
-
-    Retrieves all tasks belonging to the authenticated user.
-    Tasks are returned in descending order by creation date (newest first).
-    Requires valid JWT token in Authorization header.
+    Get all tasks for the authenticated user with optional filtering, searching, and sorting.
 
     Args:
         user_id: User ID from URL path parameter (validated by verify_user_access)
         db: Database session
+        status: Filter by task status
+        priority: Filter by priority level
+        tags: Comma-separated tags to filter by (AND logic)
+        due_before: Filter tasks due before this datetime
+        due_after: Filter tasks due after this datetime
+        overdue: If true, only return overdue tasks
+        search: Case-insensitive search in title and description
+        sort: Field to sort by
+        order: Sort direction (asc/desc)
 
     Returns:
-        List[TaskResponse]: List of tasks (empty list if user has no tasks)
+        List[TaskResponse]: Filtered, sorted list of tasks
 
     Raises:
         HTTPException: 401 if token is missing or invalid
         HTTPException: 403 if user_id doesn't match token user_id
+        HTTPException: 422 if invalid filter/sort parameters
         HTTPException: 503 error if database is temporarily unavailable
     """
     try:
-        # Query tasks filtered by user_id, ordered by created_at DESC
-        stmt = (
-            select(Task)
-            .where(Task.user_id == user_id)
-            .order_by(Task.created_at.desc())
-        )
+        # Validate sort field
+        if sort and sort not in VALID_SORT_FIELDS:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "type": "validation-error",
+                    "title": "Validation Error",
+                    "detail": f"Invalid sort field. Must be one of: {', '.join(VALID_SORT_FIELDS)}",
+                    "status": 422
+                }
+            )
+
+        # Validate priority filter
+        if priority:
+            try:
+                TaskPriority(priority.lower())
+            except ValueError:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "type": "validation-error",
+                        "title": "Validation Error",
+                        "detail": "Invalid priority. Must be one of: high, medium, low",
+                        "status": 422
+                    }
+                )
+
+        # Build base query
+        stmt = select(Task).where(Task.user_id == user_id)
+
+        # Status filter
+        if status and status != "all":
+            if status == "pending":
+                stmt = stmt.where(Task.status == TaskStatus.PENDING)
+            elif status == "completed":
+                stmt = stmt.where(Task.status == TaskStatus.COMPLETED)
+
+        # Priority filter
+        if priority:
+            stmt = stmt.where(Task.priority == TaskPriority(priority.lower()))
+
+        # Tags filter (AND logic — task must have ALL specified tags)
+        if tags:
+            tag_list = [t.strip().lower() for t in tags.split(",") if t.strip()]
+            for tag in tag_list:
+                stmt = stmt.where(literal(tag) == func.any(Task.tags))
+
+        # Due date range filters
+        if due_before:
+            stmt = stmt.where(Task.due_date <= due_before)
+        if due_after:
+            stmt = stmt.where(Task.due_date >= due_after)
+
+        # Overdue filter
+        if overdue:
+            stmt = stmt.where(Task.due_date < func.now(), Task.status == TaskStatus.PENDING)
+
+        # Search filter (case-insensitive ILIKE on title and description)
+        if search:
+            search_pattern = f"%{search}%"
+            stmt = stmt.where(
+                or_(
+                    Task.title.ilike(search_pattern),
+                    Task.description.ilike(search_pattern),
+                )
+            )
+
+        # Sort logic
+        sort_field = sort or "created_at"
+        sort_dir = order or "desc"
+
+        if sort_field == "priority":
+            # Custom priority ordering: high=1, medium=2, low=3
+            priority_order = case(
+                (Task.priority == TaskPriority.HIGH, 1),
+                (Task.priority == TaskPriority.MEDIUM, 2),
+                (Task.priority == TaskPriority.LOW, 3),
+                else_=4,
+            )
+            primary_sort = priority_order.asc() if sort_dir == "asc" else priority_order.desc()
+        elif sort_field == "due_date":
+            # Nulls last for due_date sorting
+            if sort_dir == "asc":
+                primary_sort = Task.due_date.asc().nullslast()
+            else:
+                primary_sort = Task.due_date.desc().nullslast()
+        elif sort_field == "status":
+            if sort_dir == "asc":
+                primary_sort = Task.status.asc()
+            else:
+                primary_sort = Task.status.desc()
+        else:
+            # Default: created_at
+            if sort_dir == "asc":
+                primary_sort = Task.created_at.asc()
+            else:
+                primary_sort = Task.created_at.desc()
+
+        # Apply sort with secondary sorts
+        stmt = stmt.order_by(primary_sort, Task.due_date.asc().nullslast(), Task.created_at.desc())
 
         result = await db.execute(stmt)
         tasks = result.scalars().all()
 
-        # Return empty list if no tasks found (happens naturally)
         return [TaskResponse.model_validate(task) for task in tasks]
 
+    except HTTPException:
+        raise
+
     except (DBAPIError, OperationalError) as e:
-        # Handle database connection failures with RFC 7807 error
         raise HTTPException(
             status_code=503,
             detail={
@@ -109,12 +223,19 @@ async def create_task(
         task_id = uuid4()
 
         # T027-T030: Create new task instance with all required fields
+        # Normalize empty tags to None
+        task_tags = task_data.tags if task_data.tags else None
+
         new_task = Task(
             id=task_id,
             user_id=user_id,
             title=task_data.title,
             description=task_data.description,
-            status=TaskStatus.PENDING  # T029: Set default status="pending"
+            status=TaskStatus.PENDING,
+            priority=TaskPriority(task_data.priority) if task_data.priority else TaskPriority.MEDIUM,
+            due_date=task_data.due_date,
+            tags=task_tags,
+            recurrence=TaskRecurrence(task_data.recurrence) if task_data.recurrence else TaskRecurrence.NONE,
         )
 
         # T034: Save to database and return with 201 Created
@@ -331,12 +452,20 @@ async def update_task(
                     }
                 )
 
-        # T048: Update only provided fields (title and/or description)
+        # T048: Update only provided fields
         # T051: Validation of at least one field is handled by TaskUpdate schema
         if task_data.title is not None:
             task.title = task_data.title
         if task_data.description is not None:
             task.description = task_data.description
+        if task_data.priority is not None:
+            task.priority = TaskPriority(task_data.priority)
+        if task_data.due_date is not None:
+            task.due_date = task_data.due_date
+        if task_data.tags is not None:
+            task.tags = task_data.tags if task_data.tags else None
+        if task_data.recurrence is not None:
+            task.recurrence = TaskRecurrence(task_data.recurrence)
 
         # T049: Preserve status and created_at fields (not modified)
         # T050: Update updated_at timestamp (handled automatically by onupdate trigger)
