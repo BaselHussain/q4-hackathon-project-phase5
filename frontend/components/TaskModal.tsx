@@ -4,20 +4,20 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Task } from '@/lib/api';
 import { toast } from 'sonner';
-import TaskForm from '@/components/TaskForm';
+import TaskForm, { TaskFormData } from '@/components/TaskForm';
 
 interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   task?: Task | undefined;
-  onCreateTask: (data: { title: string; description?: string | undefined }) => Promise<Task | null>;
-  onUpdateTask: (id: string, data: { title?: string | undefined; description?: string | undefined }) => Promise<Task | null>;
+  onCreateTask: (data: TaskFormData) => Promise<Task | null>;
+  onUpdateTask: (id: string, data: TaskFormData) => Promise<Task | null>;
 }
 
 export default function TaskModal({ isOpen, onClose, task, onCreateTask, onUpdateTask }: TaskModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSave = async (formData: { title: string; description?: string | undefined }) => {
+  const handleSave = async (formData: TaskFormData) => {
     setIsSubmitting(true);
     try {
       if (task) {

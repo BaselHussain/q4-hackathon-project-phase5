@@ -8,17 +8,20 @@ import TaskModal from '@/components/TaskModal';
 import { AlertTriangle, RefreshCw, Plus, Inbox } from 'lucide-react';
 import { useTasks } from '@/hooks/useTasks';
 import { Button } from '@/components/ui/button';
-import { Task } from '@/lib/api';
+import { Task, TaskPriority } from '@/lib/api';
 
 const TaskList: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [priorityFilter, setPriorityFilter] = useState<'all' | TaskPriority>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
   const { tasks, loading, error, loadTasks, createTask, updateTask, deleteTask, toggleTaskCompletion } = useTasks();
 
-  const filteredTasks = filter === 'all'
-    ? tasks
-    : tasks.filter(task => task.status === filter);
+  const filteredTasks = tasks.filter(task => {
+    if (filter !== 'all' && task.status !== filter) return false;
+    if (priorityFilter !== 'all' && task.priority !== priorityFilter) return false;
+    return true;
+  });
 
   const handleEdit = (task: Task) => {
     setEditingTask(task);
@@ -43,11 +46,18 @@ const TaskList: React.FC = () => {
     setEditingTask(undefined);
   };
 
+  const filterProps = {
+    filter,
+    onFilterChange: setFilter,
+    priorityFilter,
+    onPriorityFilterChange: setPriorityFilter,
+  };
+
   if (error) {
     return (
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <TaskFilter filter={filter} onFilterChange={setFilter} />
+          <TaskFilter {...filterProps} />
           <Button onClick={handleCreateNew} size="sm">
             <Plus className="h-4 w-4" />
             New Task
@@ -80,7 +90,7 @@ const TaskList: React.FC = () => {
     return (
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <TaskFilter filter={filter} onFilterChange={setFilter} />
+          <TaskFilter {...filterProps} />
         </div>
         <div className="space-y-3">
           {[...Array(3)].map((_, index) => (
@@ -101,7 +111,7 @@ const TaskList: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <TaskFilter filter={filter} onFilterChange={setFilter} />
+        <TaskFilter {...filterProps} />
         <Button onClick={handleCreateNew} size="sm">
           <Plus className="h-4 w-4" />
           New Task
@@ -114,14 +124,14 @@ const TaskList: React.FC = () => {
             <Inbox className="h-7 w-7 text-zinc-600" />
           </div>
           <h3 className="text-lg font-semibold text-zinc-300 mb-1">
-            {filter === 'all' ? 'No tasks yet' : `No ${filter} tasks`}
+            {filter === 'all' && priorityFilter === 'all' ? 'No tasks yet' : 'No matching tasks'}
           </h3>
           <p className="text-sm text-zinc-500 text-center max-w-xs mb-5">
-            {filter === 'all'
+            {filter === 'all' && priorityFilter === 'all'
               ? 'Get started by creating your first task'
-              : `You don't have any ${filter} tasks at the moment`}
+              : 'No tasks match the current filters'}
           </p>
-          {filter === 'all' && (
+          {filter === 'all' && priorityFilter === 'all' && (
             <Button onClick={handleCreateNew} size="sm" variant="secondary">
               <Plus className="h-4 w-4" />
               Create your first task

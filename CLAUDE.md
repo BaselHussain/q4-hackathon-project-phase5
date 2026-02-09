@@ -335,6 +335,145 @@ For features that span multiple layers, coordinate agents in this order:
 4. frontend-nextjs-agent: Build registration form UI
 ```
 
+## Phase 5 Cloud-Native Skills
+
+These skills are specifically for Phase 5 cloud-native deployment with Kubernetes, Dapr, Kafka, Helm, and CI/CD. Use these skills when implementing Spec 8 (Event-Driven Architecture) and Spec 9 (Deployment).
+
+### 1. Minikube Setup (`minikube-setup-script`)
+**Use for**: Local Kubernetes development environment setup
+- Creating bash scripts to bootstrap Minikube clusters
+- Installing Dapr runtime on Minikube
+- Installing Kafka/Redpanda via Strimzi operator
+- Setting up common components (PostgreSQL, monitoring)
+- Health verification and troubleshooting scripts
+
+**When to invoke**:
+```bash
+# When setting up local development environment
+Task: "Create Minikube setup script with Dapr and Kafka"
+→ Use minikube-setup-script skill
+
+# When writing CI/CD Minikube test environment
+Task: "Generate script to bootstrap Minikube for GitHub Actions"
+→ Use minikube-setup-script skill
+```
+
+### 2. Helm Chart Generator (`helm-chart-generator`)
+**Use for**: Kubernetes application packaging with Helm 3
+- Generating production-ready Helm charts for FastAPI services
+- Creating charts for Kafka consumers and microservices
+- Configuring Dapr sidecar injection in Helm templates
+- Parameterizing charts for different environments (dev/staging/prod)
+- Best practices for values.yaml, ConfigMaps, Secrets
+
+**When to invoke**:
+```bash
+# When packaging services for Kubernetes
+Task: "Create Helm chart for backend API service with Dapr sidecar"
+→ Use helm-chart-generator skill
+
+# When deploying microservices
+Task: "Generate Helm chart for recurring task engine service"
+→ Use helm-chart-generator skill
+```
+
+### 3. Dapr Sidecar Injection (`dapr-sidecar-injection`)
+**Use for**: Dapr runtime configuration in Kubernetes
+- Generating correct Dapr annotations for Deployments/StatefulSets/Jobs
+- Configuring app-id, ports, and Dapr components
+- Setting up Pub/Sub, State Store, Bindings, Secrets
+- Observability and logging configuration
+- Best practices for Dapr sidecar resource limits
+
+**When to invoke**:
+```bash
+# When adding Dapr to Kubernetes manifests
+Task: "Add Dapr sidecar annotations to backend deployment"
+→ Use dapr-sidecar-injection skill
+
+# When configuring Dapr components
+Task: "Configure Dapr Pub/Sub component for Kafka"
+→ Use dapr-sidecar-injection skill
+```
+
+### 4. Kafka Topic Creator (`kafka-topic-creator`)
+**Use for**: Kafka topic configuration and management
+- Generating Strimzi KafkaTopic CRDs for Kubernetes
+- Creating kafka-topics.sh CLI scripts
+- Configuring Redpanda topics
+- Setting production-ready topic settings (partitions, replication, retention)
+- Topic naming conventions and best practices
+
+**When to invoke**:
+```bash
+# When defining event topics
+Task: "Create Kafka topics for task.created, task.updated, reminder.due events"
+→ Use kafka-topic-creator skill
+
+# When setting up Redpanda
+Task: "Generate Redpanda topic configuration for audit log"
+→ Use kafka-topic-creator skill
+```
+
+### 5. Kubernetes Manifest Validator (`kubernetes-manifest-validator`)
+**Use for**: Kubernetes YAML validation and security review
+- Reviewing Deployments, Services, ConfigMaps, Secrets
+- Validating correctness, security, and best practices
+- Checking resource limits, health checks, labels
+- Identifying security issues (privileged containers, root users)
+- Providing actionable fix suggestions
+
+**When to invoke**:
+```bash
+# When reviewing Kubernetes manifests
+Task: "Validate backend deployment manifest for security and best practices"
+→ Use kubernetes-manifest-validator skill
+
+# Before deploying to production
+Task: "Review all Kubernetes manifests for security issues"
+→ Use kubernetes-manifest-validator skill
+```
+
+### 6. GitHub Actions CI/CD Generator (`github-actions-cicd-generator`)
+**Use for**: Automated CI/CD pipeline creation
+- Generating GitHub Actions workflows for Docker image builds
+- Creating workflows for running tests in CI
+- Deploying Helm charts to Kubernetes
+- Minikube integration testing in CI
+- Multi-environment deployment (staging/production) with approval gates
+
+**When to invoke**:
+```bash
+# When setting up CI/CD
+Task: "Create GitHub Actions workflow to build Docker images and deploy to Kubernetes"
+→ Use github-actions-cicd-generator skill
+
+# When adding automated testing
+Task: "Generate workflow to test on Minikube before deploying to cloud"
+→ Use github-actions-cicd-generator skill
+```
+
+## Cloud-Native Workflow (Phase 5)
+
+For Phase 5 cloud-native features, use skills in this order:
+
+1. **Local Setup**: Use `minikube-setup-script` to create local dev environment
+2. **Kafka Topics**: Use `kafka-topic-creator` to define event topics
+3. **Helm Charts**: Use `helm-chart-generator` to package services
+4. **Dapr Config**: Use `dapr-sidecar-injection` to add Dapr to services
+5. **Validation**: Use `kubernetes-manifest-validator` to review manifests
+6. **CI/CD**: Use `github-actions-cicd-generator` to automate deployment
+
+**Example workflow for "Event-Driven Architecture" (Spec 8)**:
+```bash
+1. minikube-setup-script: Create local Minikube + Dapr + Kafka setup
+2. kafka-topic-creator: Define topics (task.created, task.updated, reminder.due)
+3. helm-chart-generator: Create Helm charts for backend, recurring-engine, reminder-service
+4. dapr-sidecar-injection: Add Dapr annotations to all service deployments
+5. kubernetes-manifest-validator: Review all manifests for security/best practices
+6. github-actions-cicd-generator: Create CI/CD pipeline for automated deployment
+```
+
 ## Authentication Requirements
 
 **Better Auth Integration**:

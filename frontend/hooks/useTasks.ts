@@ -2,14 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
-import { Task, taskApi } from '@/lib/api';
+import { Task, TaskPriority, TaskRecurrence, taskApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { useErrorHandling } from './useErrorHandling';
 
-// TaskData for create/update — backend only accepts title + description
+// TaskData for create/update — includes advanced fields
 interface TaskData {
   title: string;
   description?: string | undefined;
+  priority?: TaskPriority | undefined;
+  dueDate?: string | null | undefined;
+  tags?: string[] | null | undefined;
+  recurrence?: TaskRecurrence | undefined;
 }
 
 interface ApiError {
@@ -72,6 +76,10 @@ export const useTasks = () => {
         title: taskData.title,
         description: taskData.description,
         status: 'pending',
+        priority: taskData.priority ?? 'medium',
+        dueDate: taskData.dueDate ?? null,
+        tags: taskData.tags ?? null,
+        recurrence: taskData.recurrence ?? 'none',
         userId: user.id,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -82,6 +90,10 @@ export const useTasks = () => {
       const newTask = await taskApi.createTask({
         title: taskData.title,
         description: taskData.description,
+        priority: taskData.priority,
+        dueDate: taskData.dueDate,
+        tags: taskData.tags,
+        recurrence: taskData.recurrence,
       });
 
       // Replace temp task with real one
@@ -106,8 +118,15 @@ export const useTasks = () => {
     }
   };
 
-  // Update an existing task (title and/or description only)
-  const updateTask = async (id: string, taskData: { title?: string | undefined; description?: string | undefined }): Promise<Task | null> => {
+  // Update an existing task
+  const updateTask = async (id: string, taskData: {
+    title?: string | undefined;
+    description?: string | undefined;
+    priority?: TaskPriority | undefined;
+    dueDate?: string | null | undefined;
+    tags?: string[] | null | undefined;
+    recurrence?: TaskRecurrence | undefined;
+  }): Promise<Task | null> => {
     if (!user) {
       setError({ message: 'User not authenticated' });
       return null;
