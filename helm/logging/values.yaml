@@ -1,0 +1,189 @@
+# Default values for Loki stack (Minikube)
+# Optimized for local development with minimal resource usage
+
+loki:
+  enabled: true
+
+  loki:
+    auth_enabled: false
+
+    commonConfig:
+      replication_factor: 1
+
+    storage:
+      type: filesystem
+
+    schemaConfig:
+      configs:
+        - from: 2024-01-01
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+
+    limits_config:
+      retention_period: 168h  # 7 days
+      max_query_series: 1000
+      max_query_lookback: 720h  # 30 days
+      ingestion_rate_mb: 10
+      ingestion_burst_size_mb: 20
+
+  # Single binary deployment for Minikube
+  deploymentMode: SingleBinary
+
+  singleBinary:
+    replicas: 1
+
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: standard
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  # Disable components not needed in single binary mode
+  backend:
+    replicas: 0
+  read:
+    replicas: 0
+  write:
+    replicas: 0
+
+  # Gateway configuration
+  gateway:
+    enabled: true
+    replicas: 1
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+  # Monitoring integration
+  monitoring:
+    serviceMonitor:
+      enabled: true
+      labels:
+        release: kube-prometheus-stack
+
+    selfMonitoring:
+      enabled: false
+      grafanaAgent:
+        installOperator: false
+
+promtail:
+  enabled: true
+
+  config:
+    clients:
+      - url: http://{{ .Release.Name }}-loki-gateway/loki/api/v1/push
+
+    positions:
+      filename: /tmp/positions.yaml
+
+    scrape_configs:
+      # Scrape Kubernetes pod logs
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+
+        relabel_configs:
+          # Only scrape pods with logging enabled
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+
+          # Extract namespace
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+
+          # Extract pod name
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+
+          # Extract container name
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            target_label: container
+
+          # Extract app label
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: app
+
+          # Extract service label
+          - source_labels: [__meta_kubernetes_pod_label_service]
+            target_label: service
+
+          # Set log path
+          - source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+            target_label: __path__
+            separator: /
+            replacement: /var/log/pods/*$1/*.log
+
+        # Parse JSON logs
+        pipeline_stages:
+          - json:
+              expressions:
+                timestamp: timestamp
+                level: level
+                logger: logger
+                message: message
+                trace_id: trace_id
+                span_id: span_id
+                user_id: user_id
+                request_id: request_id
+
+          # Extract timestamp
+          - timestamp:
+              source: timestamp
+              format: RFC3339Nano
+
+          # Set log level as label
+          - labels:
+              level:
+              logger:
+              service:
+
+          # Output structured log
+          - output:
+              source: message
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+  # DaemonSet configuration to run on all nodes
+  tolerations:
+    - effect: NoSchedule
+      operator: Exists
+
+  # Mount host paths for log access
+  extraVolumes:
+    - name: pods
+      hostPath:
+        path: /var/log/pods
+    - name: containers
+      hostPath:
+        path: /var/lib/docker/containers
+
+  extraVolumeMounts:
+    - name: pods
+      mountPath: /var/log/pods
+      readOnly: true
+    - name: containers
+      mountPath: /var/lib/docker/containers
+      readOnly: true

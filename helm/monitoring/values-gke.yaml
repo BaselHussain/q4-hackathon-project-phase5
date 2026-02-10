@@ -1,0 +1,79 @@
+# GKE-specific values for monitoring stack
+# Extends default values.yaml with Google Kubernetes Engine settings
+
+kube-prometheus-stack:
+  # Prometheus configuration for GKE
+  prometheus:
+    prometheusSpec:
+      # Storage configuration for GKE (GCP Persistent Disk)
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: standard-rwo
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 50Gi
+
+      # Retention for production
+      retention: 30d
+      retentionSize: "40GB"
+
+      # Resource limits for GKE (production)
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+
+  # Grafana configuration for GKE
+  grafana:
+    # Persistence with GCP Persistent Disk
+    persistence:
+      enabled: true
+      storageClassName: standard-rwo
+      size: 10Gi
+
+    # Ingress configuration for GKE (GCP Load Balancer)
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      hosts:
+        - grafana.todoapp.example.com
+      tls:
+        - secretName: grafana-tls
+          hosts:
+            - grafana.todoapp.example.com
+
+    # Resource limits for production
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+  # Alertmanager configuration for GKE
+  alertmanager:
+    alertmanagerSpec:
+      storage:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: standard-rwo
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 5Gi
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 200m
+          memory: 512Mi

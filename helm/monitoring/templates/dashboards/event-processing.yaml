@@ -1,0 +1,136 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-event-processing
+  namespace: {{ .Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app: grafana
+    release: {{ .Release.Name }}
+data:
+  event-processing.json: |-
+    {
+      "dashboard": {
+        "title": "Todo App - Event Processing",
+        "description": "Event-driven architecture metrics: Kafka topics, Dapr pub/sub, consumer lag",
+        "tags": ["todo-app", "events", "kafka", "dapr"],
+        "timezone": "browser",
+        "schemaVersion": 36,
+        "version": 1,
+        "refresh": "30s",
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "Events Published per Topic",
+            "type": "graph",
+            "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+            "targets": [
+              {
+                "expr": "sum(rate(dapr_component_pubsub_ingress_count[5m])) by (topic)",
+                "legendFormat": "{{topic}}",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "ops", "label": "Events/sec"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Events Consumed per Topic",
+            "type": "graph",
+            "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+            "targets": [
+              {
+                "expr": "sum(rate(dapr_component_pubsub_egress_count[5m])) by (topic)",
+                "legendFormat": "{{topic}}",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "ops", "label": "Events/sec"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Kafka Consumer Lag",
+            "type": "graph",
+            "gridPos": {"x": 0, "y": 8, "w": 24, "h": 8},
+            "targets": [
+              {
+                "expr": "kafka_consumer_lag_messages",
+                "legendFormat": "{{consumer_group}} - {{topic}}",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "short", "label": "Messages Behind"},
+              {"format": "short"}
+            ],
+            "alert": {
+              "conditions": [
+                {
+                  "evaluator": {"params": [1000], "type": "gt"},
+                  "operator": {"type": "and"},
+                  "query": {"params": ["A", "5m", "now"]},
+                  "reducer": {"params": [], "type": "avg"},
+                  "type": "query"
+                }
+              ],
+              "executionErrorState": "alerting",
+              "frequency": "1m",
+              "handler": 1,
+              "name": "High Consumer Lag",
+              "noDataState": "no_data",
+              "notifications": []
+            }
+          },
+          {
+            "id": 4,
+            "title": "Event Processing Latency (p95)",
+            "type": "graph",
+            "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(dapr_http_server_request_duration_ms_bucket[5m])) by (le, app_id))",
+                "legendFormat": "{{app_id}} p95",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "ms", "label": "Latency"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 5,
+            "title": "Dapr Pub/Sub Operations",
+            "type": "stat",
+            "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+            "targets": [
+              {
+                "expr": "sum(rate(dapr_component_pubsub_ingress_count[5m]))",
+                "refId": "A"
+              }
+            ],
+            "options": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": {
+                "calcs": ["lastNotNull"],
+                "fields": "",
+                "values": false
+              }
+            }
+          }
+        ]
+      }
+    }

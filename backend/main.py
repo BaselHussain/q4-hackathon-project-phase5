@@ -19,6 +19,10 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
+# Prometheus metrics instrumentation (Spec 9)
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter, Histogram
+
 from routers import tasks
 from schemas import ProblemDetail
 from src.api import auth_router
@@ -30,12 +34,11 @@ from app.chatkit_server import AppChatKitServer
 from app.chatkit_store import MemoryStore
 from chatkit.server import StreamingResult
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Structured logging configuration (Spec 9 - T034)
+from utils.structured_logger import get_logger
+from middleware.logging_middleware import LoggingMiddleware
+
+logger = get_logger(__name__)
 
 # T037: Configure slowapi rate limiter (5 requests per minute per IP)
 limiter = Limiter(key_func=get_remote_address)
@@ -210,6 +213,9 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
         }
     )
 
+# Add logging middleware for request context (Spec 9 - T034)
+app.add_middleware(LoggingMiddleware)
+
 # Configure CORS middleware for development (allow all origins)
 app.add_middleware(
     CORSMiddleware,
@@ -218,6 +224,55 @@ app.add_middleware(
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
 )
+
+# Prometheus metrics instrumentation (Spec 9 - T019)
+# Initialize Instrumentator for automatic HTTP metrics
+instrumentator = Instrumentator(
+    should_group_status_codes=False,
+    should_ignore_untemplated=True,
+    should_respect_env_var=True,
+    should_instrument_requests_inprogress=True,
+    excluded_handlers=["/metrics", "/health"],
+    env_var_name="ENABLE_METRICS",
+    inprogress_name="http_requests_in_progress",
+    inprogress_labels=True,
+)
+
+# Add custom metrics for task operations
+tasks_created_total = Counter(
+    'tasks_created_total',
+    'Total number of tasks created',
+    ['user_id']
+)
+
+tasks_updated_total = Counter(
+    'tasks_updated_total',
+    'Total number of tasks updated',
+    ['user_id']
+)
+
+tasks_deleted_total = Counter(
+    'tasks_deleted_total',
+    'Total number of tasks deleted',
+    ['user_id']
+)
+
+# Database query metrics
+database_queries_total = Counter(
+    'database_queries_total',
+    'Total number of database queries',
+    ['operation', 'table']
+)
+
+database_query_duration_seconds = Histogram(
+    'database_query_duration_seconds',
+    'Database query duration in seconds',
+    ['operation', 'table'],
+    buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]
+)
+
+# Instrument the app and expose /metrics endpoint
+instrumentator.instrument(app).expose(app, endpoint="/metrics")
 
 
 # T068: Request logging middleware

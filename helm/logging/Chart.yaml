@@ -1,0 +1,14 @@
+apiVersion: v2
+name: logging
+description: Centralized log aggregation with Loki and Promtail
+type: application
+version: 1.0.0
+appVersion: "2.9.0"
+
+dependencies:
+  - name: loki
+    version: 5.41.0
+    repository: https://grafana.github.io/helm-charts
+  - name: promtail
+    version: 6.15.0
+    repository: https://grafana.github.io/helm-charts

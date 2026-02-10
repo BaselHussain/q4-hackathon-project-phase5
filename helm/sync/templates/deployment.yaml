@@ -18,9 +18,12 @@ spec:
         dapr.io/app-id: "{{ .Values.dapr.appId }}"
         dapr.io/app-port: "{{ .Values.dapr.appPort }}"
         dapr.io/log-level: "{{ .Values.dapr.logLevel }}"
+        # Enable Promtail log scraping (Spec 9 - T043)
+        prometheus.io/scrape: "true"
       labels:
         app.kubernetes.io/name: {{ .Chart.Name }}
         app.kubernetes.io/instance: {{ .Release.Name }}
+        service: sync-service
     spec:
       containers:
       - name: {{ .Chart.Name }}

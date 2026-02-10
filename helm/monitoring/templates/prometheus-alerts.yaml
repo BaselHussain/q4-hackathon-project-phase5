@@ -1,0 +1,331 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-alerts
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+data:
+  alerts.yaml: |
+    groups:
+      # Application Service Alerts
+      - name: application_services
+        interval: 30s
+        rules:
+          # High error rate alert
+          - alert: HighErrorRate
+            expr: |
+              (
+                sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+                /
+                sum(rate(http_requests_total[5m])) by (service)
+              ) > 0.05
+            for: 5m
+            labels:
+              severity: critical
+              component: application
+            annotations:
+              summary: "High error rate detected in {{ $labels.service }}"
+              description: "Service {{ $labels.service }} has error rate of {{ $value | humanizePercentage }} (threshold: 5%)"
+
+          # Service down alert
+          - alert: ServiceDown
+            expr: up{job=~"backend|sync-service|recurring-task-service|notification-service|audit-service"} == 0
+            for: 2m
+            labels:
+              severity: critical
+              component: application
+            annotations:
+              summary: "Service {{ $labels.job }} is down"
+              description: "Service {{ $labels.job }} has been down for more than 2 minutes"
+
+          # High response time alert
+          - alert: HighResponseTime
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service)
+              ) > 1
+            for: 5m
+            labels:
+              severity: warning
+              component: application
+            annotations:
+              summary: "High response time in {{ $labels.service }}"
+              description: "Service {{ $labels.service }} has p95 response time of {{ $value }}s (threshold: 1s)"
+
+          # High request rate alert
+          - alert: HighRequestRate
+            expr: |
+              sum(rate(http_requests_total[5m])) by (service) > 1000
+            for: 5m
+            labels:
+              severity: warning
+              component: application
+            annotations:
+              summary: "High request rate in {{ $labels.service }}"
+              description: "Service {{ $labels.service }} is receiving {{ $value }} requests/second"
+
+      # Kubernetes Resource Alerts
+      - name: kubernetes_resources
+        interval: 30s
+        rules:
+          # Pod restart alert
+          - alert: PodRestartingTooOften
+            expr: |
+              rate(kube_pod_container_status_restarts_total[15m]) > 0.2
+            for: 5m
+            labels:
+              severity: warning
+              component: kubernetes
+            annotations:
+              summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is restarting frequently"
+              description: "Pod has restarted {{ $value }} times in the last 15 minutes"
+
+          # Pod not ready alert
+          - alert: PodNotReady
+            expr: |
+              kube_pod_status_phase{phase!~"Running|Succeeded"} == 1
+            for: 10m
+            labels:
+              severity: warning
+              component: kubernetes
+            annotations:
+              summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is not ready"
+              description: "Pod has been in {{ $labels.phase }} state for more than 10 minutes"
+
+          # High memory usage alert
+          - alert: HighMemoryUsage
+            expr: |
+              (
+                container_memory_working_set_bytes{container!=""}
+                /
+                container_spec_memory_limit_bytes{container!=""} * 100
+              ) > 80
+            for: 5m
+            labels:
+              severity: warning
+              component: kubernetes
+            annotations:
+              summary: "High memory usage in {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }}"
+              description: "Container is using {{ $value }}% of memory limit (threshold: 80%)"
+
+          # High CPU usage alert
+          - alert: HighCPUUsage
+            expr: |
+              (
+                rate(container_cpu_usage_seconds_total{container!=""}[5m])
+                /
+                container_spec_cpu_quota{container!=""} * 100000
+              ) > 80
+            for: 5m
+            labels:
+              severity: warning
+              component: kubernetes
+            annotations:
+              summary: "High CPU usage in {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }}"
+              description: "Container is using {{ $value }}% of CPU limit (threshold: 80%)"
+
+          # Persistent volume filling up
+          - alert: PersistentVolumeFillingUp
+            expr: |
+              (
+                kubelet_volume_stats_available_bytes
+                /
+                kubelet_volume_stats_capacity_bytes
+              ) < 0.2
+            for: 5m
+            labels:
+              severity: warning
+              component: kubernetes
+            annotations:
+              summary: "Persistent volume {{ $labels.persistentvolumeclaim }} is filling up"
+              description: "Volume has only {{ $value | humanizePercentage }} space remaining (threshold: 20%)"
+
+      # Dapr Alerts
+      - name: dapr_runtime
+        interval: 30s
+        rules:
+          # Dapr sidecar not ready
+          - alert: DaprSidecarNotReady
+            expr: |
+              dapr_runtime_health{type="dapr"} == 0
+            for: 2m
+            labels:
+              severity: critical
+              component: dapr
+            annotations:
+              summary: "Dapr sidecar not ready in {{ $labels.namespace }}/{{ $labels.pod }}"
+              description: "Dapr sidecar has been unhealthy for more than 2 minutes"
+
+          # High pub/sub publish failures
+          - alert: HighPubSubPublishFailures
+            expr: |
+              (
+                sum(rate(dapr_component_pubsub_egress_count{success="false"}[5m])) by (app_id, topic)
+                /
+                sum(rate(dapr_component_pubsub_egress_count[5m])) by (app_id, topic)
+              ) > 0.05
+            for: 5m
+            labels:
+              severity: warning
+              component: dapr
+            annotations:
+              summary: "High pub/sub publish failure rate in {{ $labels.app_id }}"
+              description: "App {{ $labels.app_id }} has {{ $value | humanizePercentage }} publish failures on topic {{ $labels.topic }}"
+
+          # High state store operation failures
+          - alert: HighStateStoreFailures
+            expr: |
+              (
+                sum(rate(dapr_component_state_operation_count{success="false"}[5m])) by (app_id, operation)
+                /
+                sum(rate(dapr_component_state_operation_count[5m])) by (app_id, operation)
+              ) > 0.05
+            for: 5m
+            labels:
+              severity: warning
+              component: dapr
+            annotations:
+              summary: "High state store failure rate in {{ $labels.app_id }}"
+              description: "App {{ $labels.app_id }} has {{ $value | humanizePercentage }} failures on {{ $labels.operation }} operations"
+
+      # WebSocket Alerts
+      - name: websocket_metrics
+        interval: 30s
+        rules:
+          # High WebSocket connection failures
+          - alert: HighWebSocketConnectionFailures
+            expr: |
+              (
+                sum(rate(websocket_connections_total{status="failed"}[5m]))
+                /
+                sum(rate(websocket_connections_total[5m]))
+              ) > 0.1
+            for: 5m
+            labels:
+              severity: warning
+              component: websocket
+            annotations:
+              summary: "High WebSocket connection failure rate"
+              description: "{{ $value | humanizePercentage }} of WebSocket connections are failing (threshold: 10%)"
+
+          # No active WebSocket connections (when expected)
+          - alert: NoActiveWebSocketConnections
+            expr: |
+              sum(websocket_connections_active) == 0
+            for: 10m
+            labels:
+              severity: info
+              component: websocket
+            annotations:
+              summary: "No active WebSocket connections"
+              description: "Sync service has no active WebSocket connections for 10 minutes"
+
+      # Database Alerts
+      - name: database_metrics
+        interval: 30s
+        rules:
+          # Slow database queries
+          - alert: SlowDatabaseQueries
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(database_query_duration_seconds_bucket[5m])) by (le, operation, table)
+              ) > 1
+            for: 5m
+            labels:
+              severity: warning
+              component: database
+            annotations:
+              summary: "Slow database queries detected"
+              description: "{{ $labels.operation }} on {{ $labels.table }} has p95 latency of {{ $value }}s (threshold: 1s)"
+
+          # High database error rate
+          - alert: HighDatabaseErrorRate
+            expr: |
+              (
+                sum(rate(database_queries_total{status="error"}[5m])) by (operation)
+                /
+                sum(rate(database_queries_total[5m])) by (operation)
+              ) > 0.05
+            for: 5m
+            labels:
+              severity: critical
+              component: database
+            annotations:
+              summary: "High database error rate"
+              description: "{{ $labels.operation }} operations have {{ $value | humanizePercentage }} error rate (threshold: 5%)"
+
+      # Event Processing Alerts
+      - name: event_processing
+        interval: 30s
+        rules:
+          # High event processing lag
+          - alert: HighEventProcessingLag
+            expr: |
+              kafka_consumer_lag > 1000
+            for: 10m
+            labels:
+              severity: warning
+              component: kafka
+            annotations:
+              summary: "High Kafka consumer lag in {{ $labels.consumer_group }}"
+              description: "Consumer group {{ $labels.consumer_group }} has lag of {{ $value }} messages on topic {{ $labels.topic }}"
+
+          # Audit log write failures
+          - alert: AuditLogWriteFailures
+            expr: |
+              (
+                sum(rate(audit_logs_written_total{status="failed"}[5m]))
+                /
+                sum(rate(audit_logs_written_total[5m]))
+              ) > 0.01
+            for: 5m
+            labels:
+              severity: critical
+              component: audit
+            annotations:
+              summary: "Audit log write failures detected"
+              description: "{{ $value | humanizePercentage }} of audit log writes are failing (threshold: 1%)"
+
+      # Monitoring Stack Alerts
+      - name: monitoring_stack
+        interval: 30s
+        rules:
+          # Prometheus target down
+          - alert: PrometheusTargetDown
+            expr: up == 0
+            for: 5m
+            labels:
+              severity: warning
+              component: monitoring
+            annotations:
+              summary: "Prometheus target {{ $labels.job }} is down"
+              description: "Target {{ $labels.instance }} has been down for more than 5 minutes"
+
+          # Prometheus storage filling up
+          - alert: PrometheusStorageFillingUp
+            expr: |
+              (
+                prometheus_tsdb_storage_blocks_bytes
+                /
+                prometheus_tsdb_retention_limit_bytes
+              ) > 0.8
+            for: 5m
+            labels:
+              severity: warning
+              component: monitoring
+            annotations:
+              summary: "Prometheus storage is filling up"
+              description: "Prometheus storage is {{ $value | humanizePercentage }} full (threshold: 80%)"
+
+          # Loki ingestion errors
+          - alert: LokiIngestionErrors
+            expr: |
+              rate(loki_ingester_errors_total[5m]) > 0.1
+            for: 5m
+            labels:
+              severity: warning
+              component: logging
+            annotations:
+              summary: "Loki is experiencing ingestion errors"
+              description: "Loki has {{ $value }} ingestion errors per second"

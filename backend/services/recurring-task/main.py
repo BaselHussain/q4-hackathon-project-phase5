@@ -12,14 +12,18 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+# Prometheus metrics instrumentation (Spec 9 - T020)
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter, Histogram
+
+# Structured logging configuration (Spec 9 - T035)
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from utils.structured_logger import get_logger
+
 from consumer import handle_task_event
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Environment configuration
 SERVICE_NAME = "recurring-task-service"
@@ -44,6 +48,37 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Prometheus metrics instrumentation (Spec 9 - T020)
+instrumentator = Instrumentator(
+    should_group_status_codes=False,
+    should_ignore_untemplated=True,
+    should_respect_env_var=True,
+    should_instrument_requests_inprogress=True,
+    excluded_handlers=["/metrics", "/health"],
+    env_var_name="ENABLE_METRICS",
+)
+
+# Custom metrics for recurring task processing
+recurring_tasks_processed_total = Counter(
+    'recurring_tasks_processed_total',
+    'Total number of recurring tasks processed',
+    ['status']
+)
+
+recurring_tasks_created_total = Counter(
+    'recurring_tasks_created_total',
+    'Total number of new task instances created from recurring tasks'
+)
+
+recurring_task_processing_duration_seconds = Histogram(
+    'recurring_task_processing_duration_seconds',
+    'Time to process all recurring tasks in one cycle',
+    buckets=[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0]
+)
+
+# Instrument the app and expose /metrics endpoint
+instrumentator.instrument(app).expose(app, endpoint="/metrics")
 
 
 @app.get("/health")

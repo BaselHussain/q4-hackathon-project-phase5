@@ -5,7 +5,6 @@ This module implements endpoints for task operations including listing,
 creating, updating, and deleting tasks. All endpoints require JWT authentication.
 Event publishing via Dapr Pub/Sub is integrated for event-driven architecture.
 """
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, List, Optional
 from uuid import UUID, uuid4
@@ -22,8 +21,9 @@ from models import Task, TaskStatus, TaskPriority, TaskRecurrence
 from schemas import TaskCreate, TaskResponse, TaskUpdate
 from events.publisher import publish_task_event, publish_reminder_event, publish_sync_event
 from events.schemas import TaskEventType, TaskEventPayload, ReminderEventType
+from utils.structured_logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Create router with prefix and tags
 # T046-T050: Update prefix to include user_id path parameter
@@ -180,12 +180,17 @@ async def list_tasks(
         result = await db.execute(stmt)
         tasks = result.scalars().all()
 
+        logger.info(
+            "Tasks listed",
+            extra={"user_id": str(user_id), "count": len(tasks), "status_filter": status, "sort": sort}
+        )
         return [TaskResponse.model_validate(task) for task in tasks]
 
     except HTTPException:
         raise
 
     except (DBAPIError, OperationalError) as e:
+        logger.error("Database error listing tasks", extra={"user_id": str(user_id), "error": str(e)})
         raise HTTPException(
             status_code=503,
             detail={
@@ -286,8 +291,9 @@ async def create_task(
                         reminder_time=reminder_time,
                     )
         except Exception as e:
-            logger.warning(f"Event publishing failed for task create: {e}")
+            logger.warning("Event publishing failed for task create", extra={"task_id": str(task_id), "error": str(e)})
 
+        logger.info("Task created", extra={"user_id": str(user_id), "task_id": str(task_id), "title": new_task.title})
         return TaskResponse.model_validate(new_task)
 
     except ValidationError as e:
@@ -433,8 +439,9 @@ async def toggle_task_completion(
                     reminder_time=task.due_date,
                 )
         except Exception as e:
-            logger.warning(f"Event publishing failed for task completion toggle: {e}")
+            logger.warning("Event publishing failed for task completion toggle", extra={"task_id": str(task_id), "error": str(e)})
 
+        logger.info("Task completion toggled", extra={"user_id": str(user_id), "task_id": str(task_id), "new_status": task.status.value})
         # T042: Return 200 OK with updated TaskResponse
         return TaskResponse.model_validate(task)
 
@@ -609,8 +616,9 @@ async def update_task(
                         reminder_time=reminder_time,
                     )
         except Exception as e:
-            logger.warning(f"Event publishing failed for task update: {e}")
+            logger.warning("Event publishing failed for task update", extra={"task_id": str(task_id), "error": str(e)})
 
+        logger.info("Task updated", extra={"user_id": str(user_id), "task_id": str(task_id), "changed_fields": changed})
         # T052: Return 200 OK with updated TaskResponse
         return TaskResponse.model_validate(task)
 
@@ -853,8 +861,9 @@ async def delete_task(
                     reminder_time=task_due_date,
                 )
         except Exception as e:
-            logger.warning(f"Event publishing failed for task delete: {e}")
+            logger.warning("Event publishing failed for task delete", extra={"task_id": str(task_id), "error": str(e)})
 
+        logger.info("Task deleted", extra={"user_id": str(user_id), "task_id": str(task_id), "title": task_title})
         # T064: Return 204 No Content (handled by status_code=204 in decorator)
         return None
 

@@ -1,0 +1,25 @@
+apiVersion: v2
+name: monitoring
+description: Monitoring stack wrapper for kube-prometheus-stack (Prometheus + Grafana)
+type: application
+version: 1.0.0
+appVersion: "51.0.0"
+
+dependencies:
+  - name: kube-prometheus-stack
+    version: "51.0.0"
+    repository: https://prometheus-community.github.io/helm-charts
+
+maintainers:
+  - name: Todo App Team
+    email: team@todoapp.com
+
+keywords:
+  - monitoring
+  - prometheus
+  - grafana
+  - observability
+  - metrics
+
+annotations:
+  category: Monitoring

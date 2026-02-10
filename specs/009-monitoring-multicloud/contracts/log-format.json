@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Structured Log Format",
+  "description": "JSON log format for all microservices using structlog",
+  "type": "object",
+  "required": ["timestamp", "level", "service", "message"],
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp (e.g., 2026-02-10T14:30:00.123Z)",
+      "example": "2026-02-10T14:30:00.123456Z"
+    },
+    "level": {
+      "type": "string",
+      "enum": ["debug", "info", "warning", "error", "critical"],
+      "description": "Log level"
+    },
+    "service": {
+      "type": "string",
+      "enum": ["backend", "recurring-task", "notification", "sync", "audit"],
+      "description": "Service name"
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable log message",
+      "example": "Task created successfully"
+    },
+    "context": {
+      "type": "object",
+      "description": "Additional context fields for correlation and debugging",
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "description": "Unique request ID for tracing across services",
+          "example": "req_abc123xyz"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "User ID associated with the operation",
+          "example": "user_123"
+        },
+        "task_id": {
+          "type": "string",
+          "description": "Task ID if operation is task-related",
+          "example": "task_456"
+        },
+        "event_type": {
+          "type": "string",
+          "description": "Event type for event-driven operations",
+          "example": "task.created"
+        },
+        "duration_ms": {
+          "type": "number",
+          "description": "Operation duration in milliseconds",
+          "example": 45.2
+        },
+        "error": {
+          "type": "object",
+          "description": "Error details if log level is error or critical",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Error type or exception class",
+              "example": "ValidationError"
+            },
+            "message": {
+              "type": "string",
+              "description": "Error message",
+              "example": "Invalid task title"
+            },
+            "stack_trace": {
+              "type": "string",
+              "description": "Stack trace (only in development)",
+              "example": "Traceback (most recent call last)..."
+            }
+          }
+        }
+      }
+    },
+    "logger": {
+      "type": "string",
+      "description": "Logger name (module path)",
+      "example": "backend.routers.tasks"
+    },
+    "thread": {
+      "type": "string",
+      "description": "Thread name or ID",
+      "example": "MainThread"
+    }
+  },
+  "examples": [
+    {
+      "timestamp": "2026-02-10T14:30:00.123456Z",
+      "level": "info",
+      "service": "backend",
+      "message": "Task created successfully",
+      "context": {
+        "request_id": "req_abc123xyz",
+        "user_id": "user_123",
+        "task_id": "task_456",
+        "duration_ms": 45.2
+      },
+      "logger": "backend.routers.tasks"
+    },
+    {
+      "timestamp": "2026-02-10T14:31:00.456789Z",
+      "level": "error",
+      "service": "notification",
+      "message": "Failed to send reminder notification",
+      "context": {
+        "request_id": "req_def456uvw",
+        "user_id": "user_789",
+        "task_id": "task_101",
+        "event_type": "reminder.due",
+        "error": {
+          "type": "SendGridAPIError",
+          "message": "Invalid API key"
+        }
+      },
+      "logger": "notification.services.email"
+    }
+  ]
+}

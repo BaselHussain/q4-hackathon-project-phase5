@@ -29,6 +29,18 @@ resources:
     memory: "256Mi"
     cpu: "250m"
 
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+  # targetMemoryUtilizationPercentage: 80
+
+pdb:
+  enabled: false
+  minAvailable: 1
+  # maxUnavailable: 1
+
 env:
   - name: BETTER_AUTH_SECRET
     valueFrom:

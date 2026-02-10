@@ -23,7 +23,9 @@ from src.middleware.logging import log_security_event
 from src.models.user import User
 from src.services.email_validator import validate_and_normalize_email
 from src.services.password import hash_password, validate_password_strength, verify_password
+from utils.structured_logger import get_logger
 
+logger = get_logger(__name__)
 
 # Create router with prefix and tags
 router = APIRouter(
@@ -156,6 +158,7 @@ async def register(
         )
 
     # Step 6: Return success response
+    logger.info("User registered successfully", extra={"user_id": str(new_user.id), "email": normalized_email})
     return RegisterResponse(
         user_id=new_user.id,
         email=new_user.email,
@@ -251,6 +254,7 @@ async def login(
     access_token = create_access_token(user_id=user.id)
 
     # Step 8: Return success response with token
+    logger.info("User logged in successfully", extra={"user_id": str(user.id), "email": normalized_email})
     return LoginResponse(
         access_token=access_token,
         token_type="bearer",

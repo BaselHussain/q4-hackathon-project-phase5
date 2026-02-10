@@ -1,0 +1,36 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: dapr-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: dapr
+    release: {{ .Release.Name }}
+spec:
+  # Select all services with Dapr enabled
+  selector:
+    matchLabels:
+      dapr.io/enabled: "true"
+
+  # Scrape configuration
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      scheme: http
+
+      # Relabeling to add service name
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_app]
+          targetLabel: service
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_pod_container_name]
+          targetLabel: container
+
+  # Namespace selector (scrape from all namespaces)
+  namespaceSelector:
+    any: true
