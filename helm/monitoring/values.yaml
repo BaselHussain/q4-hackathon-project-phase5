@@ -1,0 +1,119 @@
+# Default values for monitoring stack (Minikube)
+# This is a wrapper chart for kube-prometheus-stack
+
+kube-prometheus-stack:
+  # Prometheus configuration
+  prometheus:
+    prometheusSpec:
+      # Scrape interval
+      scrapeInterval: 15s
+      evaluationInterval: 15s
+
+      # Retention period
+      retention: 15d
+      retentionSize: "10GB"
+
+      # Storage configuration for Minikube
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 10Gi
+
+      # Service monitor selector (scrape all ServiceMonitors)
+      serviceMonitorSelectorNilUsesHelmValues: false
+
+      # Resource limits for Prometheus
+      resources:
+        requests:
+          cpu: 200m
+          memory: 512Mi
+        limits:
+          cpu: 500m
+          memory: 1Gi
+
+  # Grafana configuration
+  grafana:
+    enabled: true
+
+    # Admin credentials
+    adminPassword: admin
+
+    # Persistence for Grafana
+    persistence:
+      enabled: true
+      size: 5Gi
+
+    # Resource limits for Grafana
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 250m
+        memory: 512Mi
+
+    # Grafana dashboards
+    dashboardProviders:
+      dashboardproviders.yaml:
+        apiVersion: 1
+        providers:
+          - name: 'default'
+            orgId: 1
+            folder: ''
+            type: file
+            disableDeletion: false
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/default
+
+    # Data sources
+    datasources:
+      datasources.yaml:
+        apiVersion: 1
+        datasources:
+          - name: Prometheus
+            type: prometheus
+            url: http://kube-prometheus-stack-prometheus:9090
+            access: proxy
+            isDefault: true
+          - name: Loki
+            type: loki
+            url: http://loki:3100
+            access: proxy
+
+    # Sidecar for dashboard auto-discovery
+    sidecar:
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+        folder: /var/lib/grafana/dashboards/default
+
+  # Alertmanager configuration (minimal for now)
+  alertmanager:
+    enabled: true
+    alertmanagerSpec:
+      storage:
+        volumeClaimTemplate:
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 2Gi
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 100m
+          memory: 256Mi
+
+  # Node exporter (for node metrics)
+  nodeExporter:
+    enabled: true
+
+  # Kube state metrics (for Kubernetes object metrics)
+  kubeStateMetrics:
+    enabled: true

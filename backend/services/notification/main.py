@@ -12,15 +12,19 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+# Prometheus metrics instrumentation (Spec 9 - T021)
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter, Histogram
+
+# Structured logging configuration (Spec 9 - T036)
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from utils.structured_logger import get_logger
+
 from consumer import handle_reminder_event
 from scheduler import send_reminder_notification
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Environment configuration
 DAPR_HTTP_PORT = os.getenv("DAPR_HTTP_PORT", "3500")
@@ -32,6 +36,39 @@ app = FastAPI(
     description="Schedules and sends task reminder notifications",
     version="1.0.0"
 )
+
+# Prometheus metrics instrumentation (Spec 9 - T021)
+instrumentator = Instrumentator(
+    should_group_status_codes=False,
+    should_ignore_untemplated=True,
+    should_respect_env_var=True,
+    should_instrument_requests_inprogress=True,
+    excluded_handlers=["/metrics", "/health"],
+    env_var_name="ENABLE_METRICS",
+)
+
+# Custom metrics for reminder operations
+reminders_scheduled_total = Counter(
+    'reminders_scheduled_total',
+    'Total number of reminders scheduled',
+    ['user_id']
+)
+
+reminders_sent_total = Counter(
+    'reminders_sent_total',
+    'Total number of reminders sent',
+    ['channel', 'status']
+)
+
+reminder_delivery_duration_seconds = Histogram(
+    'reminder_delivery_duration_seconds',
+    'Time to deliver a reminder',
+    ['channel'],
+    buckets=[0.1, 0.5, 1.0, 2.5, 5.0, 10.0]
+)
+
+# Instrument the app and expose /metrics endpoint
+instrumentator.instrument(app).expose(app, endpoint="/metrics")
 
 
 @app.get("/health")

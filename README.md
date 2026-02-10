@@ -1,10 +1,12 @@
-# Todo App - Event-Driven Architecture with Kafka + Dapr
+# Todo App - Cloud-Native Event-Driven Architecture
 
-A cloud-native todo application with event-driven microservices architecture using Oracle Streaming Service (Kafka-compatible) and Dapr, deployed on Oracle Cloud Infrastructure (OKE).
+A production-ready cloud-native todo application with event-driven microservices architecture using Kafka + Dapr, comprehensive monitoring with Prometheus + Grafana, centralized logging with Loki, and multi-cloud deployment support (OKE, AKS, GKE).
 
 ## Architecture Overview
 
-This application implements **Spec 8 - Kafka + Dapr Event-Driven Architecture** with the following components:
+This application implements:
+- **Spec 8**: Kafka + Dapr Event-Driven Architecture
+- **Spec 9**: Monitoring, Logging, and Multi-Cloud Deployment
 
 ### Services
 
@@ -118,9 +120,13 @@ This creates:
 - `audit_logs` table for comprehensive audit trail
 - `dapr_state` table for Dapr State Store
 
-### 4. Set Up Minikube + Dapr + Kafka
+### 4. Set Up Minikube + Dapr + Kafka + Monitoring + Logging
 
 ```bash
+# Full setup with monitoring and logging
+./scripts/setup-minikube.sh --with-monitoring --with-logging
+
+# Or minimal setup (no monitoring/logging)
 ./scripts/setup-minikube.sh
 ```
 
@@ -129,6 +135,8 @@ This script:
 - Installs Dapr 1.12.0 on Kubernetes
 - Applies Dapr components (Pub/Sub, State Store, Secrets)
 - Creates Kubernetes secrets from `.env`
+- **Optional**: Deploys Prometheus + Grafana (monitoring)
+- **Optional**: Deploys Loki + Promtail (logging)
 
 ### 5. Deploy All Services
 
@@ -145,6 +153,239 @@ This script:
 ### 6. Access Services
 
 ```bash
+# Backend API
+kubectl port-forward svc/backend 8000:8000
+
+# Sync Service (WebSocket)
+kubectl port-forward svc/sync-service 8003:8003
+
+# Dapr Dashboard
+dapr dashboard -k
+
+# Grafana (if monitoring enabled)
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
+# Open http://localhost:3000 (admin/admin)
+
+# Loki (if logging enabled)
+kubectl port-forward -n logging svc/loki-gateway 3100:80
+```
+
+### 7. Run End-to-End Tests
+
+```bash
+# Test complete deployment
+./scripts/test-e2e-minikube.sh
+```
+
+This validates:
+- All services are running
+- Dapr runtime is operational
+- Monitoring stack is collecting metrics
+- Logging stack is aggregating logs
+- Health checks pass
+
+---
+
+## Monitoring & Observability
+
+### Quick Start
+
+For detailed monitoring and logging setup, see: **[Monitoring & Logging Quick Start Guide](docs/monitoring-logging-quickstart.md)**
+
+### Metrics (Prometheus + Grafana)
+
+**Deploy Monitoring Stack**:
+```bash
+./scripts/deploy-monitoring.sh --environment minikube
+```
+
+**Access Grafana**:
+```bash
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
+# Open http://localhost:3000
+# Login: admin / admin
+```
+
+**Pre-Built Dashboards**:
+1. **Service Overview**: HTTP metrics, error rates, response times
+2. **Event Processing**: Kafka and Dapr pub/sub metrics
+3. **WebSocket Metrics**: Active connections, message delivery
+4. **Application Logs**: Centralized log viewer with Loki
+
+**Key Metrics**:
+- `http_requests_total` - Total HTTP requests
+- `http_request_duration_seconds` - Request latency (p95, p99)
+- `tasks_created_total` - Tasks created by user
+- `websocket_connections_active` - Active WebSocket connections
+- `database_query_duration_seconds` - Database query latency
+- `dapr_component_pubsub_egress_count` - Events published to Kafka
+
+### Logging (Loki + Promtail)
+
+**Deploy Logging Stack**:
+```bash
+./scripts/deploy-logging.sh --environment minikube
+```
+
+**Query Logs in Grafana**:
+1. Open Grafana (http://localhost:3000)
+2. Go to **Explore** (compass icon)
+3. Select **Loki** data source
+4. Try these queries:
+
+```logql
+# All logs from backend service
+{namespace="default", service="backend"}
+
+# Error logs only
+{namespace="default", level="ERROR"}
+
+# Logs with specific text
+{namespace="default"} |= "WebSocket"
+
+# Logs from last 5 minutes
+{namespace="default"} [5m]
+```
+
+**Structured Logging**:
+All services emit structured JSON logs with:
+- `timestamp` (RFC3339Nano)
+- `level` (INFO, WARNING, ERROR)
+- `logger` (module name)
+- `message` (log message)
+- `request_id` (unique per request)
+- `user_id` (authenticated user)
+- `trace_id` (distributed tracing)
+
+### Alerting
+
+**Pre-Configured Alerts**:
+- High error rate (> 5%)
+- Service down
+- High memory usage (> 80%)
+- Pod restarting frequently
+- Database connection failures
+- Kafka consumer lag
+
+**Configure Notifications**:
+Edit `helm/monitoring/templates/alertmanager-config.yaml` to add Slack/email webhooks.
+
+---
+
+## Multi-Cloud Deployment
+
+The Todo App supports deployment to multiple cloud providers with comprehensive guides:
+
+### Oracle Kubernetes Engine (OKE)
+
+**Full Guide**: [OKE Deployment Guide](docs/deployment/oke-deployment.md)
+
+**Quick Deploy**:
+```bash
+# 1. Create OKE cluster (via OCI Console or CLI)
+# 2. Configure kubectl
+oci ce cluster create-kubeconfig --cluster-id <cluster-ocid>
+
+# 3. Deploy monitoring
+./scripts/deploy-monitoring.sh --environment oke
+
+# 4. Deploy logging
+./scripts/deploy-logging.sh --environment oke
+
+# 5. Deploy services
+helm upgrade --install backend ./helm/backend --values ./helm/backend/values-oke.yaml
+
+# 6. Run E2E tests
+./scripts/test-e2e-oke.sh
+```
+
+**OKE-Specific Features**:
+- OCI Block Volumes for persistent storage
+- Oracle Streaming Service (Kafka-compatible)
+- OCI Object Storage for Loki logs
+- OCI Load Balancer for ingress
+
+### Azure Kubernetes Service (AKS)
+
+**Full Guide**: [AKS Deployment Guide](docs/deployment/aks-deployment.md)
+
+**Quick Deploy**:
+```bash
+# 1. Create AKS cluster
+az aks create --resource-group todoapp-rg --name todoapp-cluster
+
+# 2. Get credentials
+az aks get-credentials --resource-group todoapp-rg --name todoapp-cluster
+
+# 3. Deploy monitoring
+./scripts/deploy-monitoring.sh --environment aks
+
+# 4. Deploy logging
+./scripts/deploy-logging.sh --environment aks
+
+# 5. Deploy services
+helm upgrade --install backend ./helm/backend --values ./helm/backend/values-aks.yaml
+```
+
+**AKS-Specific Features**:
+- Azure Disk for persistent storage
+- Azure Event Hubs (Kafka-compatible)
+- Azure Blob Storage for Loki logs
+- Azure Load Balancer for ingress
+
+### Google Kubernetes Engine (GKE)
+
+**Full Guide**: [GKE Deployment Guide](docs/deployment/gke-deployment.md)
+
+**Quick Deploy**:
+```bash
+# 1. Create GKE cluster
+gcloud container clusters create todoapp-cluster --zone us-central1-a
+
+# 2. Get credentials
+gcloud container clusters get-credentials todoapp-cluster --zone us-central1-a
+
+# 3. Deploy monitoring
+./scripts/deploy-monitoring.sh --environment gke
+
+# 4. Deploy logging
+./scripts/deploy-logging.sh --environment gke
+
+# 5. Deploy services
+helm upgrade --install backend ./helm/backend --values ./helm/backend/values-gke.yaml
+```
+
+**GKE-Specific Features**:
+- Google Persistent Disk for storage
+- Self-hosted Kafka (Redpanda)
+- Google Cloud Storage for Loki logs
+- Google Cloud Load Balancer for ingress
+
+---
+
+## Production Readiness
+
+Before deploying to production, review:
+
+- **[Production Readiness Checklist](docs/production-readiness-checklist.md)** - 12-section comprehensive checklist
+- **[Operational Runbooks](docs/runbooks.md)** - Step-by-step procedures for common operations
+- **[SLI/SLO Definitions](docs/sli-slo-definitions.md)** - Service level objectives and error budgets
+- **[Incident Response Template](docs/incident-response-template.md)** - Structured incident documentation
+- **[Disaster Recovery Plan](docs/disaster-recovery-plan.md)** - Complete DR procedures (RTO: 4h, RPO: 1h)
+
+**Key Production Requirements**:
+- ✅ Resource limits and requests configured
+- ✅ Horizontal Pod Autoscaling (HPA) enabled
+- ✅ Pod Disruption Budgets (PDB) configured
+- ✅ Monitoring and alerting operational
+- ✅ Centralized logging with 30-day retention
+- ✅ Automated backups configured
+- ✅ TLS/HTTPS for all external traffic
+- ✅ Secrets management (Kubernetes Secrets or cloud secret manager)
+- ✅ Network policies for pod-to-pod communication
+- ✅ Regular security scans and updates
+
+---
 # Backend API
 kubectl port-forward svc/backend 8000:8000
 

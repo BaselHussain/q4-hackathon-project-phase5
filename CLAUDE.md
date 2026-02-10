@@ -337,7 +337,57 @@ For features that span multiple layers, coordinate agents in this order:
 
 ## Phase 5 Cloud-Native Skills
 
-These skills are specifically for Phase 5 cloud-native deployment with Kubernetes, Dapr, Kafka, Helm, and CI/CD. Use these skills when implementing Spec 8 (Event-Driven Architecture) and Spec 9 (Deployment).
+These skills are specifically for Phase 5 cloud-native deployment with Kubernetes, Dapr, Kafka, Helm, and CI/CD. Use these skills when implementing Spec 8 (Event-Driven Architecture) and Spec 9 (Monitoring, Logging, Multi-Cloud Deployment).
+
+### Monitoring & Logging (Spec 9)
+
+**Current Implementation Status**: ✅ Complete
+
+The application now includes production-ready monitoring and logging:
+
+**Monitoring Stack**:
+- Prometheus for metrics collection
+- Grafana for visualization with 4 pre-built dashboards
+- 40+ alert rules for critical issues
+- ServiceMonitor for auto-discovering Dapr sidecars
+- Multi-channel alerting (Slack, email, PagerDuty)
+
+**Logging Stack**:
+- Loki for log aggregation
+- Promtail for log collection from all pods
+- Structured JSON logging with request context
+- Cloud storage backends (OCI Object Storage, Azure Blob, GCS)
+- Fast log queries (< 2 seconds)
+
+**Key Files**:
+- `helm/monitoring/` - Prometheus + Grafana Helm charts
+- `helm/logging/` - Loki + Promtail Helm charts
+- `backend/utils/structured_logger.py` - JSON logging utility
+- `backend/middleware/logging_middleware.py` - Request context middleware
+- `scripts/deploy-monitoring.sh` - Deploy monitoring to any cluster
+- `scripts/deploy-logging.sh` - Deploy logging to any cluster
+- `scripts/test-e2e-minikube.sh` - E2E testing with monitoring/logging validation
+
+**Documentation**:
+- `docs/monitoring-logging-quickstart.md` - Quick start guide
+- `docs/production-readiness-checklist.md` - Production checklist
+- `docs/runbooks.md` - Operational procedures
+- `docs/sli-slo-definitions.md` - SLI/SLO framework
+- `docs/deployment/oke-deployment.md` - Oracle OKE deployment
+- `docs/deployment/aks-deployment.md` - Azure AKS deployment
+- `docs/deployment/gke-deployment.md` - Google GKE deployment
+
+**Usage**:
+```bash
+# Deploy with monitoring and logging
+./scripts/setup-minikube.sh --with-monitoring --with-logging
+
+# Access Grafana
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
+
+# Query logs
+# In Grafana Explore: {namespace="default", service="backend"}
+```
 
 ### 1. Minikube Setup (`minikube-setup-script`)
 **Use for**: Local Kubernetes development environment setup

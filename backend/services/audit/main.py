@@ -11,16 +11,20 @@ from typing import Dict, List
 from fastapi import FastAPI, HTTPException, Response, status
 from pydantic import BaseModel
 
+# Prometheus metrics instrumentation (Spec 9 - T023)
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter, Histogram
+
+# Structured logging configuration (Spec 9 - T038)
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from utils.structured_logger import get_logger
+
 from .consumer import handle_task_event
 from .logger import close_db_connections
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # Pydantic models for request/response validation
@@ -65,6 +69,32 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# Prometheus metrics instrumentation (Spec 9 - T023)
+instrumentator = Instrumentator(
+    should_group_status_codes=False,
+    should_ignore_untemplated=True,
+    should_respect_env_var=True,
+    should_instrument_requests_inprogress=True,
+    excluded_handlers=["/metrics", "/health"],
+    env_var_name="ENABLE_METRICS",
+)
+
+# Custom metrics for audit log operations
+audit_logs_written_total = Counter(
+    'audit_logs_written_total',
+    'Total number of audit logs written',
+    ['event_type']
+)
+
+audit_log_write_duration_seconds = Histogram(
+    'audit_log_write_duration_seconds',
+    'Time to write an audit log entry',
+    buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1]
+)
+
+# Instrument the app and expose /metrics endpoint
+instrumentator.instrument(app).expose(app, endpoint="/metrics")
 
 
 @app.get("/health")

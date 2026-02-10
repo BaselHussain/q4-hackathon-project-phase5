@@ -1,0 +1,79 @@
+# AKS-specific values for monitoring stack
+# Extends default values.yaml with Azure Kubernetes Service settings
+
+kube-prometheus-stack:
+  # Prometheus configuration for AKS
+  prometheus:
+    prometheusSpec:
+      # Storage configuration for AKS (Azure Disk)
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: azure-disk
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 50Gi
+
+      # Retention for production
+      retention: 30d
+      retentionSize: "40GB"
+
+      # Resource limits for AKS (production)
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+
+  # Grafana configuration for AKS
+  grafana:
+    # Persistence with Azure Disk
+    persistence:
+      enabled: true
+      storageClassName: azure-disk
+      size: 10Gi
+
+    # Ingress configuration for AKS (Azure Load Balancer)
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      hosts:
+        - grafana.todoapp.example.com
+      tls:
+        - secretName: grafana-tls
+          hosts:
+            - grafana.todoapp.example.com
+
+    # Resource limits for production
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+  # Alertmanager configuration for AKS
+  alertmanager:
+    alertmanagerSpec:
+      storage:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: azure-disk
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 5Gi
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 200m
+          memory: 512Mi

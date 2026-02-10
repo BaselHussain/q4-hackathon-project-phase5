@@ -1,0 +1,58 @@
+# Dapr Pub/Sub Component: Azure Event Hubs (Kafka-compatible)
+# For Azure Kubernetes Service (AKS) deployment
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pubsub
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+    # Azure Event Hubs namespace endpoint (Kafka-compatible)
+    # Format: <namespace>.servicebus.windows.net:9093
+    - name: brokers
+      secretKeyRef:
+        name: azure-eventhubs-creds
+        key: broker-endpoint
+
+    # Authentication
+    - name: authType
+      value: "password"
+
+    # Azure Event Hubs uses PLAIN SASL over TLS
+    - name: saslMechanism
+      value: "PLAIN"
+
+    # SASL Username: always "$ConnectionString" for Event Hubs
+    - name: saslUsername
+      value: "$ConnectionString"
+
+    # Connection string from Azure Event Hubs namespace
+    - name: saslPassword
+      secretKeyRef:
+        name: azure-eventhubs-creds
+        key: connection-string
+
+    # Consumer group (uses Dapr app-id)
+    - name: consumerGroup
+      value: "{APP_ID}"
+
+    # Start from oldest message on first connect
+    - name: initialOffset
+      value: "oldest"
+
+    # Maximum message size (1MB - Event Hubs limit)
+    - name: maxMessageBytes
+      value: "1048576"
+
+    # Retry interval on consume errors
+    - name: consumeRetryInterval
+      value: "1000ms"
+
+    # Kafka protocol version
+    - name: version
+      value: "3.0.0"
+
+    # TLS required for Azure Event Hubs
+    - name: disableTls
+      value: "false"

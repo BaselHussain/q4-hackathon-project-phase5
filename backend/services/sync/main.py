@@ -14,6 +14,15 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Quer
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
+# Prometheus metrics instrumentation (Spec 9 - T022)
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter, Gauge, Histogram
+
+# Structured logging configuration (Spec 9 - T037)
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from utils.structured_logger import get_logger
+
 from consumer import handle_task_update
 from websocket import ConnectionManager, verify_ws_token
 
@@ -21,12 +30,7 @@ from websocket import ConnectionManager, verify_ws_token
 # Load environment variables
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -43,6 +47,44 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Prometheus metrics instrumentation (Spec 9 - T022)
+instrumentator = Instrumentator(
+    should_group_status_codes=False,
+    should_ignore_untemplated=True,
+    should_respect_env_var=True,
+    should_instrument_requests_inprogress=True,
+    excluded_handlers=["/metrics", "/health"],
+    env_var_name="ENABLE_METRICS",
+)
+
+# Custom metrics for WebSocket operations
+websocket_connections_active = Gauge(
+    'websocket_connections_active',
+    'Active WebSocket connections',
+    ['user_id']
+)
+
+websocket_connections_total = Counter(
+    'websocket_connections_total',
+    'Total WebSocket connection events',
+    ['status']
+)
+
+websocket_messages_sent_total = Counter(
+    'websocket_messages_sent_total',
+    'Total WebSocket messages sent to clients',
+    ['event_type']
+)
+
+websocket_message_delivery_duration_seconds = Histogram(
+    'websocket_message_delivery_duration_seconds',
+    'Time to deliver a message to a WebSocket client',
+    buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5]
+)
+
+# Instrument the app and expose /metrics endpoint
+instrumentator.instrument(app).expose(app, endpoint="/metrics")
 
 # Global connection manager
 manager = ConnectionManager()

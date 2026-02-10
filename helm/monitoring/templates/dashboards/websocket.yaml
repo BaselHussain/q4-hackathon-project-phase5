@@ -1,0 +1,129 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-websocket
+  namespace: {{ .Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app: grafana
+    release: {{ .Release.Name }}
+data:
+  websocket.json: |-
+    {
+      "dashboard": {
+        "title": "Todo App - WebSocket Metrics",
+        "description": "Real-time sync service WebSocket connection and message delivery metrics",
+        "tags": ["todo-app", "websocket", "real-time", "sync"],
+        "timezone": "browser",
+        "schemaVersion": 36,
+        "version": 1,
+        "refresh": "30s",
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "Active WebSocket Connections",
+            "type": "stat",
+            "gridPos": {"x": 0, "y": 0, "w": 8, "h": 8},
+            "targets": [
+              {
+                "expr": "sum(websocket_connections_active)",
+                "refId": "A"
+              }
+            ],
+            "options": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "justifyMode": "auto",
+              "orientation": "auto",
+              "reduceOptions": {
+                "calcs": ["lastNotNull"],
+                "fields": "",
+                "values": false
+              }
+            }
+          },
+          {
+            "id": 2,
+            "title": "WebSocket Connection Events",
+            "type": "graph",
+            "gridPos": {"x": 8, "y": 0, "w": 16, "h": 8},
+            "targets": [
+              {
+                "expr": "sum(rate(websocket_connections_total{status=\"connected\"}[5m]))",
+                "legendFormat": "Connected",
+                "refId": "A"
+              },
+              {
+                "expr": "sum(rate(websocket_connections_total{status=\"disconnected\"}[5m]))",
+                "legendFormat": "Disconnected",
+                "refId": "B"
+              }
+            ],
+            "yaxes": [
+              {"format": "ops", "label": "Connections/sec"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 3,
+            "title": "WebSocket Messages Sent per Event Type",
+            "type": "graph",
+            "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+            "targets": [
+              {
+                "expr": "sum(rate(websocket_messages_sent_total[5m])) by (event_type)",
+                "legendFormat": "{{event_type}}",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "ops", "label": "Messages/sec"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 4,
+            "title": "WebSocket Message Delivery Latency (p95)",
+            "type": "graph",
+            "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(websocket_message_delivery_duration_seconds_bucket[5m])) by (le))",
+                "legendFormat": "p95 latency",
+                "refId": "A"
+              },
+              {
+                "expr": "histogram_quantile(0.50, sum(rate(websocket_message_delivery_duration_seconds_bucket[5m])) by (le))",
+                "legendFormat": "p50 latency",
+                "refId": "B"
+              }
+            ],
+            "yaxes": [
+              {"format": "s", "label": "Latency"},
+              {"format": "short"}
+            ]
+          },
+          {
+            "id": 5,
+            "title": "WebSocket Connections by User",
+            "type": "graph",
+            "gridPos": {"x": 0, "y": 16, "w": 24, "h": 8},
+            "targets": [
+              {
+                "expr": "websocket_connections_active",
+                "legendFormat": "Active connections",
+                "refId": "A"
+              }
+            ],
+            "yaxes": [
+              {"format": "short", "label": "Connections"},
+              {"format": "short"}
+            ]
+          }
+        ]
+      }
+    }

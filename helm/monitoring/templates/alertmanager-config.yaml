@@ -1,0 +1,244 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+data:
+  alertmanager.yaml: |
+    global:
+      # Global configuration
+      resolve_timeout: 5m
+
+      # Slack configuration (optional)
+      slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+
+      # Email configuration (optional)
+      smtp_smarthost: 'smtp.gmail.com:587'
+      smtp_from: 'alerts@todoapp.example.com'
+      smtp_auth_username: 'alerts@todoapp.example.com'
+      smtp_auth_password: 'YOUR_SMTP_PASSWORD'
+      smtp_require_tls: true
+
+    # Templates for alert notifications
+    templates:
+      - '/etc/alertmanager/templates/*.tmpl'
+
+    # Route tree for alert routing
+    route:
+      # Default receiver for all alerts
+      receiver: 'default'
+
+      # Group alerts by these labels
+      group_by: ['alertname', 'cluster', 'service']
+
+      # Wait time before sending initial notification
+      group_wait: 30s
+
+      # Wait time before sending notification about new alerts in group
+      group_interval: 5m
+
+      # Wait time before re-sending notification
+      repeat_interval: 4h
+
+      # Child routes for specific alert types
+      routes:
+        # Critical alerts - immediate notification
+        - match:
+            severity: critical
+          receiver: 'critical-alerts'
+          group_wait: 10s
+          group_interval: 1m
+          repeat_interval: 1h
+          continue: true
+
+        # Warning alerts - less urgent
+        - match:
+            severity: warning
+          receiver: 'warning-alerts'
+          group_wait: 1m
+          group_interval: 10m
+          repeat_interval: 12h
+
+        # Info alerts - low priority
+        - match:
+            severity: info
+          receiver: 'info-alerts'
+          group_wait: 5m
+          group_interval: 30m
+          repeat_interval: 24h
+
+        # Application-specific alerts
+        - match:
+            component: application
+          receiver: 'application-team'
+          continue: true
+
+        # Database alerts
+        - match:
+            component: database
+          receiver: 'database-team'
+          continue: true
+
+        # Kubernetes infrastructure alerts
+        - match:
+            component: kubernetes
+          receiver: 'infrastructure-team'
+          continue: true
+
+        # Dapr runtime alerts
+        - match:
+            component: dapr
+          receiver: 'platform-team'
+          continue: true
+
+    # Inhibition rules - suppress alerts when other alerts are firing
+    inhibit_rules:
+      # Inhibit warning alerts if critical alert is firing for same service
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'service', 'namespace']
+
+      # Inhibit pod alerts if node is down
+      - source_match:
+          alertname: 'NodeDown'
+        target_match_re:
+          alertname: 'Pod.*'
+        equal: ['node']
+
+      # Inhibit service alerts if pod is not ready
+      - source_match:
+          alertname: 'PodNotReady'
+        target_match:
+          alertname: 'ServiceDown'
+        equal: ['namespace', 'pod']
+
+    # Receivers - notification destinations
+    receivers:
+      # Default receiver (logs only)
+      - name: 'default'
+        webhook_configs:
+          - url: 'http://localhost:9093/api/v1/alerts'
+            send_resolved: true
+
+      # Critical alerts - multiple channels
+      - name: 'critical-alerts'
+        # Slack notifications
+        slack_configs:
+          - channel: '#alerts-critical'
+            title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Severity:* {{ .Labels.severity }}
+              *Component:* {{ .Labels.component }}
+              *Details:* <{{ .GeneratorURL }}|View in Prometheus>
+              {{ end }}
+            send_resolved: true
+            color: 'danger'
+
+        # Email notifications
+        email_configs:
+          - to: 'oncall@todoapp.example.com'
+            headers:
+              Subject: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+            html: |
+              <h2>Critical Alert Fired</h2>
+              {{ range .Alerts }}
+              <p><strong>Alert:</strong> {{ .Annotations.summary }}</p>
+              <p><strong>Description:</strong> {{ .Annotations.description }}</p>
+              <p><strong>Severity:</strong> {{ .Labels.severity }}</p>
+              <p><strong>Component:</strong> {{ .Labels.component }}</p>
+              <p><strong>Started:</strong> {{ .StartsAt }}</p>
+              {{ end }}
+            send_resolved: true
+
+        # PagerDuty integration (optional)
+        # pagerduty_configs:
+        #   - service_key: 'YOUR_PAGERDUTY_SERVICE_KEY'
+        #     description: '{{ .GroupLabels.alertname }}: {{ .Annotations.summary }}'
+        #     severity: 'critical'
+
+      # Warning alerts - Slack only
+      - name: 'warning-alerts'
+        slack_configs:
+          - channel: '#alerts-warning'
+            title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Severity:* {{ .Labels.severity }}
+              *Component:* {{ .Labels.component }}
+              {{ end }}
+            send_resolved: true
+            color: 'warning'
+
+      # Info alerts - Slack only
+      - name: 'info-alerts'
+        slack_configs:
+          - channel: '#alerts-info'
+            title: 'ℹ️ INFO: {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              {{ end }}
+            send_resolved: true
+            color: 'good'
+
+      # Application team
+      - name: 'application-team'
+        slack_configs:
+          - channel: '#team-application'
+            title: '{{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Severity:* {{ .Labels.severity }}
+              {{ end }}
+            send_resolved: true
+
+      # Database team
+      - name: 'database-team'
+        slack_configs:
+          - channel: '#team-database'
+            title: '🗄️ Database Alert: {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Severity:* {{ .Labels.severity }}
+              {{ end }}
+            send_resolved: true
+
+      # Infrastructure team
+      - name: 'infrastructure-team'
+        slack_configs:
+          - channel: '#team-infrastructure'
+            title: '🏗️ Infrastructure Alert: {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Severity:* {{ .Labels.severity }}
+              {{ end }}
+            send_resolved: true
+
+      # Platform team (Dapr, Kubernetes)
+      - name: 'platform-team'
+        slack_configs:
+          - channel: '#team-platform'
+            title: '⚙️ Platform Alert: {{ .GroupLabels.alertname }}'
+            text: |
+              {{ range .Alerts }}
+              *Alert:* {{ .Annotations.summary }}
+              *Description:* {{ .Annotations.description }}
+              *Severity:* {{ .Labels.severity }}
+              {{ end }}
+            send_resolved: true

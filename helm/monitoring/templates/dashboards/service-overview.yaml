@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-service-overview
+  namespace: {{ .Release.Namespace }}
+  labels:
+    grafana_dashboard: "1"
+    app: grafana
+    release: {{ .Release.Name }}
+data:
+  service-overview.json: |-
+{{ .Files.Get "dashboards/service-overview.json" | indent 4 }}

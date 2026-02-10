@@ -35,7 +35,12 @@
       "Bash(git log --oneline --grep=\"chatkit\\\\|ChatKit\" -i --all)",
       "Bash(echo:*)",
       "Bash(\"E:/Q4 Hackathon/Project 2 \\(Phase 5\\)/backend/.dockerignore\")",
-      "Bash(bash .specify/scripts/bash/create-phr.sh --title \"kafka-dapr-implementation\" --stage \"green\" --feature \"008-kafka-dapr\" --json)"
+      "Bash(bash .specify/scripts/bash/create-phr.sh --title \"kafka-dapr-implementation\" --stage \"green\" --feature \"008-kafka-dapr\" --json)",
+      "Bash(.specify/scripts/bash/create-new-feature.sh:*)",
+      "Bash(.specify/scripts/bash/create-phr.sh:*)",
+      "Bash(.specify/scripts/bash/setup-plan.sh --json)",
+      "Bash(bash .specify/scripts/bash/update-agent-context.sh)",
+      "Bash(bash:*)"
     ]
   }
 }

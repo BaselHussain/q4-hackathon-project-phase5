@@ -1,0 +1,118 @@
+name: E2E Tests on Minikube
+
+on:
+  push:
+    branches: [ main, 009-monitoring-multicloud ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        cache-dependency-path: backend/requirements.txt
+
+    - name: Install test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r backend/requirements.txt
+        pip install pytest pytest-asyncio httpx websockets
+
+    - name: Set up Minikube
+      uses: medyagh/setup-minikube@latest
+      with:
+        minikube-version: '1.32.0'
+        kubernetes-version: 'v1.28.0'
+        cpus: 4
+        memory: 8192
+        driver: docker
+
+    - name: Install Dapr CLI
+      run: |
+        wget -q https://raw.githubusercontent.com/dapr/cli/master/install/install.sh -O - | /bin/bash
+        dapr init -k --wait
+
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: 'v3.13.0'
+
+    - name: Build and load Docker images
+      run: |
+        eval $(minikube docker-env)
+        docker build -t backend-api:e2e -f backend/Dockerfile backend/
+        docker build -t recurring-task-service:e2e -f backend/services/recurring-task/Dockerfile backend/services/recurring-task/
+        docker build -t notification-service:e2e -f backend/services/notification/Dockerfile backend/services/notification/
+        docker build -t sync-service:e2e -f backend/services/sync/Dockerfile backend/services/sync/
+        docker build -t audit-service:e2e -f backend/services/audit/Dockerfile backend/services/audit/
+
+    - name: Create secrets
+      run: |
+        kubectl create secret generic app-secrets \
+          --from-literal=database-url="${{ secrets.DATABASE_URL || 'postgresql://test:test@localhost:5432/testdb' }}" \
+          --from-literal=better-auth-secret="${{ secrets.BETTER_AUTH_SECRET || 'test-secret-key' }}" \
+          --from-literal=jwt-secret="${{ secrets.JWT_SECRET || 'test-jwt-secret' }}" \
+          --from-literal=sendgrid-api-key="test" \
+          --from-literal=fcm-server-key="test" || true
+
+        kubectl create secret generic redpanda-creds \
+          --from-literal=sasl-username="admin" \
+          --from-literal=sasl-password="admin" || true
+
+    - name: Deploy services via Helm
+      run: |
+        for service in backend recurring-task notification sync audit; do
+          helm upgrade --install $service helm/$service/ \
+            --set image.tag=e2e \
+            --set image.pullPolicy=Never \
+            --wait --timeout 120s || true
+        done
+
+    - name: Wait for pods to be ready
+      run: |
+        kubectl wait --for=condition=ready pod --all --timeout=180s || {
+          echo "--- Pod Status ---"
+          kubectl get pods
+          echo "--- Pod Descriptions ---"
+          kubectl describe pods
+          exit 1
+        }
+
+    - name: Port-forward services
+      run: |
+        kubectl port-forward svc/backend 8000:8000 &
+        kubectl port-forward svc/recurring-task 8001:8001 &
+        kubectl port-forward svc/notification 8002:8002 &
+        kubectl port-forward svc/sync 8003:8003 &
+        kubectl port-forward svc/audit 8004:8004 &
+        sleep 5
+
+    - name: Run E2E tests
+      env:
+        API_BASE_URL: http://localhost:8000
+        TEST_USER_EMAIL: e2etest@example.com
+        TEST_USER_PASSWORD: TestPass123!
+      run: |
+        cd backend
+        pytest tests/e2e/ -v --tb=short --timeout=60
+
+    - name: Collect logs on failure
+      if: failure()
+      run: |
+        echo "=== Pod Logs ==="
+        for pod in $(kubectl get pods -o jsonpath='{.items[*].metadata.name}'); do
+          echo "--- $pod ---"
+          kubectl logs $pod --all-containers --tail=50 || true
+        done
+        echo "=== Events ==="
+        kubectl get events --sort-by='.lastTimestamp' | tail -30

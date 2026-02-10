@@ -57,6 +57,18 @@ env:
   - name: DAPR_HTTP_PORT
     value: "3500"
 
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+  # targetMemoryUtilizationPercentage: 80
+
+pdb:
+  enabled: false
+  minAvailable: 1
+  # maxUnavailable: 1
+
 nodeSelector: {}
 tolerations: []
 affinity: {}

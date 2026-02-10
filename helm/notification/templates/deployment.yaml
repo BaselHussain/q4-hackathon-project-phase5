@@ -23,8 +23,11 @@ spec:
         dapr.io/enable-metrics: "true"
         dapr.io/metrics-port: "{{ .Values.dapr.metricsPort }}"
         {{- end }}
+        # Enable Promtail log scraping (Spec 9 - T043)
+        prometheus.io/scrape: "true"
       labels:
         {{- include "notification.selectorLabels" . | nindent 8 }}
+        service: notification-service
     spec:
       {{- with .Values.nodeSelector }}
       nodeSelector:
